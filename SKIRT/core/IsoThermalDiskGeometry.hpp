@@ -3,14 +3,14 @@
 ////       © Astronomical Observatory, Ghent University         ////
 ///////////////////////////////////////////////////////////////// */
 
-#ifndef EXPDISKGEOMETRY_HPP
-#define EXPDISKGEOMETRY_HPP
+#ifndef ISOTHERMALDISKGEOMETRY_HPP
+#define ISOTHERMALDISKGEOMETRY_HPP
 
 #include "SepAxGeometry.hpp"
 
 ////////////////////////////////////////////////////////////////////
 
-/** The ExpDiskGeometry class is a subclass of the SepAxGeometry class, and describes axisymmetric
+/** The IsoThermalDiskGeometry class is a subclass of the SepAxGeometry class, and describes axisymmetric
     geometries characterized by a double-exponential profile, in which the density decreases
     exponentially in the radial and the vertical directions; see van der Kruit (1986, A&A, 157,
     230–244). A truncation can be applied in both the radial and vertical direction, and an inner
@@ -20,9 +20,9 @@
     the scale length \f$h_R\f$, the vertical scale height \f$h_z\f$, the radial truncation
     radius \f$R_{\text{max}}\f$, the vertical truncation radius \f$z_{\text{max}}\f$, and the inner
     radius \f$R_{\text{min}}\f$. */
-class ExpDiskGeometry : public SepAxGeometry
+class IsoThermalDiskGeometry : public SepAxGeometry
 {
-    ITEM_CONCRETE(ExpDiskGeometry, SepAxGeometry, "an exponential disk geometry")
+    ITEM_CONCRETE(IsoThermalDiskGeometry, SepAxGeometry, "an exponential disk geometry")
 
         PROPERTY_DOUBLE(scaleLength, "the scale length")
         ATTRIBUTE_QUANTITY(scaleLength, "length")

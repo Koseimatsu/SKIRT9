@@ -3,14 +3,14 @@
 ////       © Astronomical Observatory, Ghent University         ////
 ///////////////////////////////////////////////////////////////// */
 
-#include "ExpDiskGeometry.hpp"
+#include "IsoThermalDiskGeometry.hpp"
 #include "FatalError.hpp"
 #include "Random.hpp"
 #include "SpecialFunctions.hpp"
 
 ////////////////////////////////////////////////////////////////////
 
-void ExpDiskGeometry::setupSelfBefore()
+void IsoThermalDiskGeometry::setupSelfBefore()
 {
     SepAxGeometry::setupSelfBefore();
 
@@ -29,7 +29,7 @@ void ExpDiskGeometry::setupSelfBefore()
 
 ////////////////////////////////////////////////////////////////////
 
-double ExpDiskGeometry::density(double R, double z) const
+double IsoThermalDiskGeometry::density(double R, double z) const
 {
     double absz = fabs(z);
     if (_Rmax > 0.0 && R > _Rmax)
@@ -43,7 +43,7 @@ double ExpDiskGeometry::density(double R, double z) const
 
 ////////////////////////////////////////////////////////////////////
 
-double ExpDiskGeometry::randomCylRadius() const
+double IsoThermalDiskGeometry::randomCylRadius() const
 {
     double R, X;
     do
@@ -56,7 +56,7 @@ double ExpDiskGeometry::randomCylRadius() const
 
 ////////////////////////////////////////////////////////////////////
 
-double ExpDiskGeometry::randomZ() const
+double IsoThermalDiskGeometry::randomZ() const
 {
     double z, X;
     do
@@ -69,7 +69,7 @@ double ExpDiskGeometry::randomZ() const
 
 //////////////////////////////////////////////////////////////////////
 
-double ExpDiskGeometry::SigmaR() const
+double IsoThermalDiskGeometry::SigmaR() const
 {
     if (_Rmax > 0.0)
         return _rho0 * _hR * (exp(-_Rmin / _hR) - exp(-_Rmax / _hR));
@@ -79,7 +79,7 @@ double ExpDiskGeometry::SigmaR() const
 
 //////////////////////////////////////////////////////////////////////
 
-double ExpDiskGeometry::SigmaZ() const
+double IsoThermalDiskGeometry::SigmaZ() const
 {
     if (_Rmin > 0.0)
         return 0.0;
