@@ -107,6 +107,7 @@
 #include "InstrumentSystem.hpp"
 #include "InstrumentWavelengthGridProbe.hpp"
 #include "IntegratedLuminosityNormalization.hpp"
+#include "IsoThermalDiskGeometry.hpp"
 #include "IsotropicAngularDistribution.hpp"
 #include "LaserAngularDistribution.hpp"
 #include "LaunchedPacketsProbe.hpp"
@@ -381,6 +382,7 @@ SimulationItemRegistry::SimulationItemRegistry(string version, string format)
 
     // angular distributions
     ItemRegistry::add<AngularDistribution>();
+    ItemRegistry::add<ExpDiskGeometry>();
     ItemRegistry::add<IsotropicAngularDistribution>();
     ItemRegistry::add<AxAngularDistribution>();
     ItemRegistry::add<LaserAngularDistribution>();

@@ -22,7 +22,7 @@
     radius \f$R_{\text{min}}\f$. */
 class IsoThermalDiskGeometry : public SepAxGeometry
 {
-    ITEM_CONCRETE(IsoThermalDiskGeometry, SepAxGeometry, "an exponential disk geometry")
+    ITEM_CONCRETE(IsoThermalDiskGeometry, SepAxGeometry, "an iso-thermal disk geometry")
 
         PROPERTY_DOUBLE(scaleLength, "the scale length")
         ATTRIBUTE_QUANTITY(scaleLength, "length")
@@ -31,23 +31,6 @@ class IsoThermalDiskGeometry : public SepAxGeometry
         PROPERTY_DOUBLE(scaleHeight, "the scale height")
         ATTRIBUTE_QUANTITY(scaleHeight, "length")
         ATTRIBUTE_MIN_VALUE(scaleHeight, "]0")
-
-        PROPERTY_DOUBLE(minRadius, "the radius of the central cavity")
-        ATTRIBUTE_QUANTITY(minRadius, "length")
-        ATTRIBUTE_MIN_VALUE(minRadius, "[0")
-        ATTRIBUTE_DEFAULT_VALUE(minRadius, "0")
-
-        PROPERTY_DOUBLE(maxRadius, "the truncation radius (zero means no truncation)")
-        ATTRIBUTE_QUANTITY(maxRadius, "length")
-        ATTRIBUTE_MIN_VALUE(maxRadius, "[0")
-        ATTRIBUTE_DEFAULT_VALUE(maxRadius, "0")
-        ATTRIBUTE_DISPLAYED_IF(maxRadius, "Level2")
-
-        PROPERTY_DOUBLE(maxZ, "the truncation height (zero means no truncation)")
-        ATTRIBUTE_QUANTITY(maxZ, "length")
-        ATTRIBUTE_MIN_VALUE(maxZ, "[0")
-        ATTRIBUTE_DEFAULT_VALUE(maxZ, "0")
-        ATTRIBUTE_DISPLAYED_IF(maxZ, "Level2")
 
     ITEM_END()
 
@@ -113,9 +96,6 @@ private:
     // aliases to discoverable data members for ease of notation and backwards compatibility
     const double& _hR{_scaleLength};
     const double& _hz{_scaleHeight};
-    const double& _Rmin{_minRadius};
-    const double& _Rmax{_maxRadius};
-    const double& _zmax{_maxZ};
 
     // data members initialized during setup
     double _rho0{0.};
