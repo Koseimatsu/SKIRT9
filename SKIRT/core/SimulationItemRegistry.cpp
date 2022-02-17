@@ -382,7 +382,6 @@ SimulationItemRegistry::SimulationItemRegistry(string version, string format)
 
     // angular distributions
     ItemRegistry::add<AngularDistribution>();
-    ItemRegistry::add<ExpDiskGeometry>();
     ItemRegistry::add<IsotropicAngularDistribution>();
     ItemRegistry::add<AxAngularDistribution>();
     ItemRegistry::add<LaserAngularDistribution>();
@@ -407,6 +406,7 @@ SimulationItemRegistry::SimulationItemRegistry(string version, string format)
     ItemRegistry::add<AxGeometry>();
     ItemRegistry::add<SepAxGeometry>();
     ItemRegistry::add<ExpDiskGeometry>();
+    ItemRegistry::add<IsoThermalDiskGeometry>();
     ItemRegistry::add<BrokenExpDiskGeometry>();
     ItemRegistry::add<RingGeometry>();
     ItemRegistry::add<TorusGeometry>();

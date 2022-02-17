@@ -45,7 +45,7 @@ double IsoThermalDiskGeometry::randomZ() const
 
 //////////////////////////////////////////////////////////////////////
 
-double IsoThermalDiskGeometry::sigmaR() const
+double IsoThermalDiskGeometry::SigmaR() const
 {
     return _rho0*_hR;
 }
