@@ -127,7 +127,7 @@ void DustSecondarySource::preparePacketMap(size_t firstIndex, size_t numIndices)
     wv /= wv.sum();
 
     // calculate the final, composite-biased launch weight for each cell, normalized to unity
-    double xi = _ms->dustEmissionOptions()->spatialBias();
+    double xi = _config->secondarySpatialBias();
     _Wv = (1 - xi) * _Lv + xi * wv;
 
     // determine the first history index for each cell, using the adjusted cell ordering so that
@@ -269,8 +269,7 @@ namespace
             }
 
             // remember the average bulk velocity for this cell
-            if (ms->dustEmissionOptions()->DopplerShift() == true) ms->bulkVelocity(m);
-            else _bfv = Vec(0.0,0.0,0.0);
+            _bfv = ms->bulkVelocity(m);
         }
 
     private:

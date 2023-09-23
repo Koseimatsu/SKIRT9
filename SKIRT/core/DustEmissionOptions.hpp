@@ -36,11 +36,6 @@ class DustEmissionOptions : public SimulationItem, public SourceWavelengthRangeI
         ATTRIBUTE_DEFAULT_VALUE(includeHeatingByCMB, "false")
         ATTRIBUTE_DISPLAYED_IF(includeHeatingByCMB, "NonZeroRedshift")
 
-        PROPERTY_BOOL(DopplerShift, "consider doppler shift of dust themal emission. This is only valuable in the case "
-                                    "you want see the doppler shift of PAH emssion bands")
-        ATTRIBUTE_DEFAULT_VALUE(DopplerShift, "false")
-        ATTRIBUTE_DISPLAYED_IF(DopplerShift, "Level2")
-
         PROPERTY_ITEM(cellLibrary, SpatialCellLibrary, "the spatial cell grouping scheme for calculating dust emission")
         ATTRIBUTE_DEFAULT_VALUE(cellLibrary, "AllCellsLibrary")
         ATTRIBUTE_REQUIRED_IF(cellLibrary, "false")
@@ -77,13 +72,6 @@ class DustEmissionOptions : public SimulationItem, public SourceWavelengthRangeI
         ATTRIBUTE_MAX_VALUE(wavelengthBias, "1]")
         ATTRIBUTE_DEFAULT_VALUE(wavelengthBias, "0.5")
         ATTRIBUTE_DISPLAYED_IF(wavelengthBias, "Level3")
-
-        PROPERTY_DOUBLE(spatialBias,
-                        "the fraction of secondary photon packets distributed uniformly across spatial cells")
-        ATTRIBUTE_MIN_VALUE(spatialBias, "[0")
-        ATTRIBUTE_MAX_VALUE(spatialBias, "1]")
-        ATTRIBUTE_DEFAULT_VALUE(spatialBias, "0.5")
-        ATTRIBUTE_DISPLAYED_IF(spatialBias, "Level3")
 
         PROPERTY_ITEM(wavelengthBiasDistribution, WavelengthDistribution,
                       "the bias distribution for sampling secondary photon packet wavelengths")
