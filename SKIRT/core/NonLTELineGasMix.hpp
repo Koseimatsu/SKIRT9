@@ -368,6 +368,11 @@ class NonLTELineGasMix : public EmittingGasMix
         ATTRIBUTE_DEFAULT_VALUE(AcceleratedLambdaIteration, "false")
         ATTRIBUTE_DISPLAYED_IF(AcceleratedLambdaIteration, "Level3")
 
+        PROPERTY_BOOL(NgAcceleration, "use Ng Acceleration for updating level population. This option requires 4 times"
+                                      " the computational memory")
+        ATTRIBUTE_DEFAULT_VALUE(NgAcceleration, "false")
+        ATTRIBUTE_DISPLAYED_IF(NgAcceleration, "Level3")
+
         PROPERTY_BOOL(storeMeanIntensities, "store the mean radiation field intensity at each transition line")
         ATTRIBUTE_DEFAULT_VALUE(storeMeanIntensities, "false")
         ATTRIBUTE_DISPLAYED_IF(storeMeanIntensities, "Level3")
@@ -580,6 +585,10 @@ private:
     int _indexFirstColPartnerDensity{0};
     int _indexFirstLevelPopulation{0};
     int _indexFirstMeanIntensity{0};
+    int _indexFirstOldLevelPopulation1{0};
+    int _indexFirstOldLevelPopulation2{0};
+    int _indexFirstOldLevelPopulation3{0};
+    int _indexIterationNumber{0};
 };
 
 ////////////////////////////////////////////////////////////////////

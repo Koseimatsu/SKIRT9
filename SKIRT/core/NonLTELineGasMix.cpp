@@ -262,6 +262,31 @@ vector<StateVariable> NonLTELineGasMix::specificStateVariableInfo() const
             result.push_back(StateVariable::custom(index++, "mean intensity at line " + std::to_string(k),
                                                    "wavelengthmeanintensity"));
     }
+
+    // if Ng acceleration is used, add custom variable for up to three previous populations of each energy level
+    if (NgAcceleration())
+    {
+        // add custom variable for one previous populations of each energy level
+        const_cast<NonLTELineGasMix*>(this)->_indexFirstOldLevelPopulation1 = index;
+        for (int p = 0; p != _numLevels; ++p)
+            result.push_back(StateVariable::custom(index++, "one previous population of level "
+                                                   + std::to_string(p), "numbervolumedensity"));
+
+        // add custom variable for two previous populations of each energy level
+        const_cast<NonLTELineGasMix*>(this)->_indexFirstOldLevelPopulation2 = index;
+        for (int p = 0; p != _numLevels; ++p)
+            result.push_back(StateVariable::custom(index++, "two previous population of level "
+                                                   + std::to_string(p), "numbervolumedensity"));
+
+        // add custom variable for three previous populations of each energy level
+        const_cast<NonLTELineGasMix*>(this)->_indexFirstOldLevelPopulation3 = index;
+        for (int p = 0; p != _numLevels; ++p)
+            result.push_back(StateVariable::custom(index++, "three previous population of level "
+                                                   + std::to_string(p), "numbervolumedensity"));
+        // add custom variable for iteration number
+        const_cast<NonLTELineGasMix*>(this)->_indexIterationNumber = index;
+        result.push_back(StateVariable::custom(index++, "iteration number ", ""));
+    }
     return result;
 }
 
@@ -276,6 +301,14 @@ vector<StateVariable> NonLTELineGasMix::specificStateVariableInfo() const
 #define setLevelPopulation(index, value) setCustom(_indexFirstLevelPopulation + (index), (value))
 #define levelPopulation(index) custom(_indexFirstLevelPopulation + (index))
 #define setMeanIntensity(index, value) setCustom(_indexFirstMeanIntensity + (index), (value))
+#define setLevelPopulation1(index, value) setCustom(_indexFirstOldLevelPopulation1 + (index), (value))
+#define levelPopulation1(index) custom(_indexFirstOldLevelPopulation1 + (index))
+#define setLevelPopulation2(index, value) setCustom(_indexFirstOldLevelPopulation2 + (index), (value))
+#define levelPopulation2(index) custom(_indexFirstOldLevelPopulation2 + (index))
+#define setLevelPopulation3(index, value) setCustom(_indexFirstOldLevelPopulation3 + (index), (value))
+#define levelPopulation3(index) custom(_indexFirstOldLevelPopulation3 + (index))
+#define setIterationNumber(value) setCustom(_indexIterationNumber, (value))
+#define IterationNumber() custom(_indexIterationNumber)
 
 ////////////////////////////////////////////////////////////////////
 
@@ -320,6 +353,17 @@ void NonLTELineGasMix::initializeSpecificState(MaterialState* state, double /*me
         // normalize and store
         levelPops *= state->numberDensity() / levelPops.sum();
         for (int p = 0; p != _numLevels; ++p) state->setLevelPopulation(p, levelPops[p]);
+
+        if (NgAcceleration())
+        {
+            for (int p = 0; p != _numLevels; ++p)
+            {
+                state->setLevelPopulation1(p, 0.0);
+                state->setLevelPopulation2(p, 0.0);
+                state->setLevelPopulation3(p, 0.0);
+            }
+            state->setIterationNumber(0);
+        }
     }
 }
 
@@ -367,6 +411,63 @@ namespace
 
         // return the solution
         return solution;
+    }
+
+    // update level populations using Ng acceleration for atoms or molecules.
+    // This update will be performed every three or four iteration steps for two- or three-level molecules, respectively.
+    // All variable names are based on lecture notes by C.P. Dullemond which are based on Olson, Auer and Buchler (1985).
+    // The lecture note is available in Chapter 4
+    // from https://www.ita.uni-heidelberg.de/~dullemond/lectures/radtrans_2012/index.shtml
+    Array NgAccelerationCalculation(Array& levelpop0, Array& levelpop1, Array& levelpop2, Array& levelpop3)
+    {
+        size_t size = levelpop0.size();
+        if (size == 2)
+        {
+            Array newpop(size);
+            double a = (levelpop0[0] - levelpop2[0]) / (levelpop1[0] - levelpop2[0]);
+            for (size_t i = 0; i < size; i++) newpop[i] = a*levelpop0[i] + (1-a)*levelpop1[i];
+            return newpop;
+        }
+        else
+        {
+            Array Q1(size);
+            Array Q2(size);
+            Array Q3(size);
+            Array newpop(size);
+
+            for (size_t i = 0; i < size; i++)
+            {
+                Q1[i] = levelpop0[i] - 2.0*levelpop1[i] + levelpop2[i];
+                Q2[i] = levelpop0[i] - levelpop1[i] - levelpop2[i] + levelpop3[i];
+                Q3[i] = levelpop0[i] - levelpop1[i];
+            }
+
+            double A1 = 0.0;
+            double A2 = 0.0;
+            double B1 = 0.0;
+            double B2 = 0.0;
+            double C1 = 0.0;
+            double C2 = 0.0;
+
+            // inner product among Q1, Q2, and Q3
+            for (size_t i = 0; i < size; i++)
+            {
+                A1 += Q1[i]*Q1[i];
+                A2 += Q1[i]*Q2[i];
+                B1 += Q1[i]*Q2[i]; // = A2
+                B2 += Q2[i]*Q2[i];
+                C1 += Q1[i]*Q3[i];
+                C2 += Q2[i]*Q3[i];
+            }
+
+            double a = (C1*B2 - C2*B1)/(A1*B2 - A2*B1);
+            double b = (C2*A1 - C1*A2)/(A1*B2 - A2*B1);
+
+            for (size_t i = 0; i < size; i++) newpop[i] = (1.0 - a - b)*levelpop0[i]
+                                                          + a*levelpop1[i] + b*levelpop2[i];
+
+            return newpop;
+        }
     }
 }
 
@@ -543,10 +644,71 @@ UpdateStatus NonLTELineGasMix::updateSpecificState(MaterialState* state, const A
         {
             double oldPop = state->levelPopulation(p);
             double newPop = solution[p];
+
+            if (NgAcceleration())
+            {
+                double oldPop1 = state->levelPopulation1(p);
+                double oldPop2 = state->levelPopulation2(p);
+
+                state->setLevelPopulation3(p, oldPop2);
+                state->setLevelPopulation2(p, oldPop1);
+                state->setLevelPopulation1(p, oldPop);
+            }
+
             state->setLevelPopulation(p, newPop);
             change += abs(oldPop / newPop - 1.);
         }
         change /= _numLevels;
+
+        if (NgAcceleration())
+        {
+            int updateNumNg = 4;
+            if (numEnergyLevels() == 2) updateNumNg = 3;
+            double iterationNumber = state->IterationNumber()+1;
+            state->setIterationNumber(iterationNumber);
+            //if (iterationNumber<numUseNg() and int(iterationNumber) % updateNumNg == 0)
+            if (change<0.01 and int(iterationNumber) % updateNumNg == 0)
+            //if (int(iterationNumber) % updateNumNg == 0)
+            {
+                Array levelPop0(_numLevels);
+                Array levelPop1(_numLevels);
+                Array levelPop2(_numLevels);
+                Array levelPop3(_numLevels);
+
+                for (int p = 0; p != _numLevels; ++p)
+                {
+                    levelPop0[p]= state->levelPopulation(p);
+                    levelPop1[p]= state->levelPopulation1(p);
+                    levelPop2[p]= state->levelPopulation2(p);
+                    levelPop3[p]= state->levelPopulation3(p);
+                }
+
+                //change = 0.;
+                Array NglevelPop = NgAccelerationCalculation(levelPop0, levelPop1, levelPop2, levelPop3);
+
+                for (int p = 0; p != _numLevels; ++p)
+                {
+                    double oldPop = state->levelPopulation(p);
+                    double oldPop1 = state->levelPopulation1(p);
+                    double oldPop2 = state->levelPopulation2(p);
+                    double newPop = NglevelPop[p];
+
+                    state->setLevelPopulation3(p, oldPop2);
+                    state->setLevelPopulation2(p, oldPop1);
+                    state->setLevelPopulation1(p, oldPop);
+                    state->setLevelPopulation(p, newPop);
+                    //change += abs(oldPop / newPop - 1.);
+                }
+
+                if (abs((NglevelPop.sum() - state->numberDensity()) / state->numberDensity()) > 0.01)
+                {
+                    throw FATALERROR("Failded updating level populations: before [m-3]="
+                                     + StringUtils::toString(state->numberDensity()) + ", after [m-3]"
+                                     + StringUtils::toString(solution.sum()) + " in Ng Acceleration");
+                }
+               //change /= _numLevels;
+            }
+        }
 
         // verify convergence
         if (change > maxChangeInLevelPopulations())
