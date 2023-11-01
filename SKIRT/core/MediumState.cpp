@@ -3,6 +3,7 @@
 ////       © Astronomical Observatory, Ghent University         ////
 ///////////////////////////////////////////////////////////////// */
 
+#include "Box.hpp"
 #include "MediumState.hpp"
 #include "FatalError.hpp"
 #include "ProcessManager.hpp"
@@ -30,6 +31,9 @@ void MediumState::initCommonStateVariables(const vector<StateVariable>& variable
         switch (variable.identifier())
         {
             case StateVariable::Identifier::Volume: _off_volu = _nextOffset++; break;
+            case StateVariable::Identifier::BoundingBox:
+                _off_bound =_nextOffset;
+                _nextOffset += 6;
             case StateVariable::Identifier::BulkVelocity:
                 _off_velo = _nextOffset;
                 _nextOffset += 3;
@@ -68,6 +72,7 @@ void MediumState::initSpecificStateVariables(const vector<StateVariable>& variab
                 _nextOffset++;
                 break;
             case StateVariable::Identifier::Volume:
+            case StateVariable::Identifier::BoundingBox:
             case StateVariable::Identifier::BulkVelocity:
             case StateVariable::Identifier::MagneticField:
                 throw FATALERROR("Requesting specific state variable of unsupported type");
@@ -196,6 +201,20 @@ void MediumState::pushAggregate()
 void MediumState::setVolume(int m, double value)
 {
     _data[_numVars * m + _off_volu] = value;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void MediumState::setBoundingBox(int m, Box value)
+{
+    int i = _numVars * m + _off_bound;
+    _data[i] = value.xmin();
+    _data[i+1] = value.ymin();
+    _data[i+2] = value.zmin();
+    _data[i+3] = value.xmax();
+    _data[i+4] = value.ymax();
+    _data[i+5] = value.zmax();
+
 }
 
 //////////////////////////////////////////////////////////////////////

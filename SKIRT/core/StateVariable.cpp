@@ -18,6 +18,12 @@ StateVariable StateVariable::volume()
 {
     return StateVariable(Identifier::Volume, 0, "volume", "volume", 'e');
 }
+//////////////////////////////////////////////////////////////////////
+
+StateVariable StateVariable::boundingBox()
+{
+    return StateVariable(Identifier::BoundingBox, 0, "bounding box", "length", 'e');
+}
 
 //////////////////////////////////////////////////////////////////////
 

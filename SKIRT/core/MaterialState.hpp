@@ -56,6 +56,10 @@ public:
 
     /** This function returns the aggregate bulk velocity \f${\boldsymbol{v}}\f$ of the medium in
         the spatial cell. */
+    Box boundingBox() const { return _ms.boundingBox(_m); }
+
+    /** This function returns the aggregate bulk velocity \f${\boldsymbol{v}}\f$ of the medium in
+        the spatial cell. */
     Vec bulkVelocity() const { return _ms.bulkVelocity(_m); }
 
     /** This function returns the magnetic field \f${\boldsymbol{B}}\f$ in the spatial cell. */

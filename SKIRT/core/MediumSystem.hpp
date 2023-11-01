@@ -243,6 +243,10 @@ public:
     double volume(int m) const;
 
     /** This function returns the aggregate bulk velocity \f${\boldsymbol{v}}\f$ of the medium in
+        the spatial cell. */
+    Box boundingBox(int m) const;
+
+    /** This function returns the aggregate bulk velocity \f${\boldsymbol{v}}\f$ of the medium in
         spatial cell with index \f$m\f$. If there are multiple media components, the aggregate bulk
         velocity \f${\boldsymbol{v}}\f$ is determined by averaging the respective bulk velocities
         over the corresponding number densities, \f[{\boldsymbol{v}} = \frac{\sum_h n_h
