@@ -363,6 +363,11 @@ class NonLTELineGasMix : public EmittingGasMix
         ATTRIBUTE_DEFAULT_VALUE(lowestOpticalDepth, "-2")
         ATTRIBUTE_DISPLAYED_IF(lowestOpticalDepth, "Level3")
 
+        PROPERTY_BOOL(AcceleratedLambdaIteration, "use Accelerated Lambda iteration, this is valid only"
+                                                  " for cubical cell")
+        ATTRIBUTE_DEFAULT_VALUE(AcceleratedLambdaIteration, "false")
+        ATTRIBUTE_DISPLAYED_IF(AcceleratedLambdaIteration, "Level3")
+
         PROPERTY_BOOL(storeMeanIntensities, "store the mean radiation field intensity at each transition line")
         ATTRIBUTE_DEFAULT_VALUE(storeMeanIntensities, "false")
         ATTRIBUTE_DISPLAYED_IF(storeMeanIntensities, "Level3")
@@ -523,6 +528,11 @@ public:
     //======================== Data Members ========================
 
 private:
+
+    /** This function returns a list with the local mean intesities for the supported transitions in
+        the spatial cell and medium component represented by the specified material state. */
+    Array _ALILocalMeanIntensity(const MaterialState* state) const;
+
     // Data members loaded from text resource files and/or precalculated in setupSelfBefore()
     // (only the energy levels and transitions actually used are stored in the data members)
 

@@ -467,6 +467,32 @@ UpdateStatus NonLTELineGasMix::updateSpecificState(MaterialState* state, const A
             double J = Jsum / gsum;
             if (storeMeanIntensities()) state->setMeanIntensity(k, J);
 
+            // Accelerated Lambda Iteration
+            if (AcceleratedLambdaIteration() == true)
+            {
+                double J_local = _ALILocalMeanIntensity(state)[k];
+                auto log = find<Log>();
+
+                if (J > J_local)
+                {
+                    log->info("cell " + StringUtils::toString(state->cellIndex())
+                              + " localMeanIntensity J_local " + StringUtils::toString(k)
+                              + " " + StringUtils::toString(J_local) + " J_actual " + StringUtils::toString(J)
+                              + " J_eff " + StringUtils::toString(J-J_local) );
+                    // calculate effective mean intensity
+                    J = J - J_local;
+
+                    // The signs are reversed compared with below, since we put these equations in matrix[**][_numLevels].
+                    // add the Einstein Bul coefficients (stimulated emission)
+                    matrix[up][_numLevels] += state->levelPopulation(up) * _einsteinBul[k] * J_local;
+                    matrix[low][_numLevels] -= state->levelPopulation(up) * _einsteinBul[k] * J_local;
+
+                    // add the Einstein Blu coefficients (absorption)
+                    matrix[low][_numLevels] += state->levelPopulation(low) * _einsteinBlu[k] * J_local;
+                    matrix[up][_numLevels] -= state->levelPopulation(low) * _einsteinBlu[k] * J_local;
+                }
+            }
+
             // add the Einstein Bul coefficients (stimulated emission)
             matrix[up][up] -= _einsteinBul[k] * J;
             matrix[low][up] += _einsteinBul[k] * J;
@@ -695,6 +721,89 @@ Array NonLTELineGasMix::lineEmissionSpectrum(const MaterialState* state, const A
 double NonLTELineGasMix::indicativeTemperature(const MaterialState* state, const Array& /*Jv*/) const
 {
     return state->temperature();
+}
+
+////////////////////////////////////////////////////////////////////
+
+Array NonLTELineGasMix::_ALILocalMeanIntensity(const MaterialState *state) const
+{
+    Array localMeanIntensity(_numLines);
+    if (state->numberDensity() > 0.)
+    {
+        for (int k = 0; k != _numLines; ++k)
+        {
+            int up = _indexUpRad[k];
+            //int low = _indexLowRad[k];
+
+            // calculate the mean intensity of the radiation field convolved over the normalized line profile g:
+            //   J_convolved = \int J_lambda(lambda) g(lambda) d lambda  /  \int g(lambda) d lambda
+            // we use all wavelength points within a given range around the line center and verify that the
+            // grid is sufficiently resolved to reproduce the normalizaton value of 1 = \int g(lambda) d lambda
+            double center = _center[k];
+            double sigma = sigmaForLine(center, state->temperature(), _mass);
+            double lambdamin = center - PROFILE_RANGE * sigma;
+            double lambdamax = center + PROFILE_RANGE * sigma;
+            int ellmin = std::lower_bound(begin(_lambdav), end(_lambdav), lambdamin) - begin(_lambdav);
+            int ellmax = std::upper_bound(begin(_lambdav), end(_lambdav), lambdamax) - begin(_lambdav);
+            double gsum = 0.;
+            double Jsum = 0.;
+            //double dx = abs(state->boundingBox().xmax() - state->boundingBox().xmin());
+            //double dy = abs(state->boundingBox().ymax() - state->boundingBox().ymin());
+            //double dz = abs(state->boundingBox().zmax() - state->boundingBox().zmin());
+            //double length = dx;
+            //if (dy > 0 and dy < length) length = dy;
+            //if (dz > 0 and dz < length) length = dz;
+            double diag = 1.7320508 * cbrt(state->volume());
+            double length = diag;
+            //auto log = find<Log>();
+            //log->info("dx=" + StringUtils::toString(dx) + ", dy=" + StringUtils::toString(dy) + ", dz="
+            //          + StringUtils::toString(dz) + " dia " + StringUtils::toString(diag));
+
+            for (int ell = ellmin; ell != ellmax; ++ell)
+            {
+                double gdlambda = gaussian(_lambdav[ell], center, sigma) * _dlambdav[ell];
+                gsum += gdlambda;
+                // if we have other medium we need to add the opacities in the following equation.
+                double opacity_lambda = opacityAbs(_lambdav[ell], state, 0);
+                 Jsum += (1.0 - exp(-opacity_lambda*length)) / opacity_lambda
+                         * gaussian(_lambdav[ell], center, sigma) * gdlambda;
+                //Jsum += (opacity_lambda*length + exp(-opacity_lambda*length) -1) / opacity_lambda
+                  //     * gaussian(_lambdav[ell], center, sigma) * gdlambda;
+            }
+
+            if (abs(gsum - 1.) > MAX_GAUSS_ERROR_WARN)
+            {
+                auto units = find<Units>();
+                vector<string> message = {
+                    "Integral of Gaussian line profile over radiation field is inaccurate:",
+                    "  integral equals " + StringUtils::toString(gsum) + " rather than unity",
+                    "  over wavelengths from " + StringUtils::toString(units->owavelength(lambdamin)) + " "
+                        + units->uwavelength() + " to " + StringUtils::toString(units->owavelength(lambdamax)) + " "
+                        + units->uwavelength(),
+                    "  --> increase the resolution of the radiation field wavelength grid"};
+                if (abs(gsum - 1.) > MAX_GAUSS_ERROR_FAIL)
+                {
+                    auto log = find<Log>();
+                    log->info("Gausss(" + StringUtils::toString(_lambdav[ellmin])
+                              + ")=" + StringUtils::toString(gaussian(_lambdav[ellmin], center, sigma)) + "Gausss("
+                              + StringUtils::toString(_lambdav[ellmax - 1])
+                              + ")=" + StringUtils::toString(gaussian(_lambdav[ellmax - 1], center, sigma)));
+                    throw FATALERROR(StringUtils::join(message, "\n"));
+                }
+                auto log = find<Log>();
+                log->warning(message[0]);
+                for (size_t i = 1; i != message.size(); ++i) find<Log>()->info(message[i]);
+            }
+            double J = Jsum /gsum;
+
+            // if we have other medium we need to add the luminosities in the following equation.
+            localMeanIntensity[k] = (Constants::h() * Constants::c() * _einsteinA[k] * state->levelPopulation(up)
+                              / 4. / M_PI / _center[k]) * J;
+        }
+    }
+
+
+    return localMeanIntensity;
 }
 
 ////////////////////////////////////////////////////////////////////
