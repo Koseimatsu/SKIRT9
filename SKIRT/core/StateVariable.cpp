@@ -20,9 +20,9 @@ StateVariable StateVariable::volume()
 }
 //////////////////////////////////////////////////////////////////////
 
-StateVariable StateVariable::boundingBox()
+StateVariable StateVariable::diagonal()
 {
-    return StateVariable(Identifier::BoundingBox, 0, "bounding box", "length", 'e');
+    return StateVariable(Identifier::Diagonal, 0, "diagonal length", "length", 'e');
 }
 
 //////////////////////////////////////////////////////////////////////

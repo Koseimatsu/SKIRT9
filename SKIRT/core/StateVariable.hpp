@@ -39,7 +39,7 @@ class StateVariable
 public:
     /** This enumeration lists the identifiers for the supported state variables as indicated in
         the table in the class header. */
-    enum class Identifier { Volume, BoundingBox, BulkVelocity, MagneticField, NumberDensity, Metallicity, Temperature,
+    enum class Identifier { Volume, Diagonal , BulkVelocity, MagneticField, NumberDensity, Metallicity, Temperature,
                             Custom };
 
     // ================== Constructing ==================
@@ -54,8 +54,8 @@ public:
     /** This function returns a StateVariable instance of type Volume. */
     static StateVariable volume();
 
-    /** This function returns a StateVariable instance of type boundingBox. */
-    static StateVariable boundingBox();
+    /** This function returns a StateVariable instance of type diagonal. */
+    static StateVariable diagonal();
 
     /** This function returns a StateVariable instance of type BulkVelocity. */
     static StateVariable bulkVelocity();

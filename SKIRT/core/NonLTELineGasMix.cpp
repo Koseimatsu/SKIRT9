@@ -815,7 +815,7 @@ double NonLTELineGasMix::opacityAbs(double lambda, const MaterialState* state, c
         // apply lower limit to (negative) optical depth
         if (opacity < 0.)
         {
-            double diagonal = 1.7320508 * cbrt(state->volume());  // correct only for cubical cell
+            double diagonal = state->diagonal();  // correct only for cubical cell
             if (opacity * diagonal < lowestOpticalDepth()) opacity = lowestOpticalDepth() / diagonal;
         }
     }
@@ -909,14 +909,8 @@ Array NonLTELineGasMix::_ALILocalMeanIntensity(const MaterialState *state) const
             int ellmax = std::upper_bound(begin(_lambdav), end(_lambdav), lambdamax) - begin(_lambdav);
             double gsum = 0.;
             double Jsum = 0.;
-            //double dx = abs(state->boundingBox().xmax() - state->boundingBox().xmin());
-            //double dy = abs(state->boundingBox().ymax() - state->boundingBox().ymin());
-            //double dz = abs(state->boundingBox().zmax() - state->boundingBox().zmin());
-            //double length = dx;
-            //if (dy > 0 and dy < length) length = dy;
-            //if (dz > 0 and dz < length) length = dz;
-            double diag = 1.7320508 * cbrt(state->volume());
-            double length = diag;
+            double length = state->diagonal();
+
             //auto log = find<Log>();
             //log->info("dx=" + StringUtils::toString(dx) + ", dy=" + StringUtils::toString(dy) + ", dz="
             //          + StringUtils::toString(dz) + " dia " + StringUtils::toString(diag));

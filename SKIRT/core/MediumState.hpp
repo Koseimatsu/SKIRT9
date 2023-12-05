@@ -7,7 +7,6 @@
 #define MEDIUMSTATE_HPP
 
 #include "Array.hpp"
-#include "Box.hpp"
 #include "StateVariable.hpp"
 #include "UpdateStatus.hpp"
 #include "Vec.hpp"
@@ -193,7 +192,7 @@ public:
     void setVolume(int m, double value);
 
     /** This function sets the Bounding Box \f${\boldsymbol{Box}}\f$ of the spatial cell with index \f$m\f$. */
-    void setBoundingBox(int m, Box value);
+    void setDiagonal(int m, double value);
 
     /** This function sets the aggregate bulk velocity \f${\boldsymbol{v}}\f$ of the medium in the
         spatial cell with index \f$m\f$. */
@@ -228,15 +227,7 @@ public:
     /** This function returns the bounding box \f${\boldsymbol{Box}}\f$ of the medium in
         the spatial cell with index \f$m\f$, or zero if storage was not requested for this
         variable. */
-    Box boundingBox(int m) const
-    {
-        if (_off_bound)
-        {
-            int i = _numVars * m + _off_bound;
-            return Box(_data[i], _data[i + 1], _data[i + 2], _data[i + 3], _data[i + 4], _data[i + 5]);
-        }
-        return Box();
-    }
+    double diagonal(int m) const {return _data[_numVars * m + _off_diag];}
 
     /** This function returns the aggregate bulk velocity \f${\boldsymbol{v}}\f$ of the medium in
         the spatial cell with index \f$m\f$, or zero if storage was not requested for this
@@ -293,7 +284,7 @@ private:
 
     // offsets used for mapping common and specific variables (for each medium component) to indices in the data array
     int _off_volu{0};
-    int _off_bound{0};
+    int _off_diag{0};
     int _off_velo{0};
     int _off_mfld{0};
     vector<int> _off_dens;

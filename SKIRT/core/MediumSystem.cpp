@@ -203,7 +203,7 @@ void MediumSystem::setupSelfAfter()
     // common state variables
     vector<StateVariable> variables;
     variables.emplace_back(StateVariable::volume());
-    variables.emplace_back(StateVariable::boundingBox());
+    variables.emplace_back(StateVariable::diagonal());
     if (_config->hasMovingMedia()) variables.emplace_back(StateVariable::bulkVelocity());
     if (_config->hasMagneticField()) variables.emplace_back(StateVariable::magneticField());
     _state.initCommonStateVariables(variables);
@@ -311,8 +311,8 @@ void MediumSystem::setupSelfAfter()
                 // volume
                 _state.setVolume(m, _grid->volume(m));
 
-                // Bounding Box
-                _state.setBoundingBox(m, _grid->boundingBox());
+                // diagonal length
+                _state.setDiagonal (m, _grid->diagonal(m));
 
                 // density: use optional fast-track interface or sample within the cell
                 if (dic)
@@ -491,9 +491,9 @@ double MediumSystem::volume(int m) const
 
 ////////////////////////////////////////////////////////////////////
 
-Box MediumSystem::boundingBox(int m) const
+double MediumSystem::diagonal(int m) const
 {
-    return _state.boundingBox(m);
+    return _state.diagonal(m);
 }
 ////////////////////////////////////////////////////////////////////
 

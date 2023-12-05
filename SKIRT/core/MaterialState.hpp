@@ -54,9 +54,8 @@ public:
     /** This function returns the volume \f$V\f$ of the spatial cell. */
     double volume() const { return _ms.volume(_m); }
 
-    /** This function returns the aggregate bulk velocity \f${\boldsymbol{v}}\f$ of the medium in
-        the spatial cell. */
-    Box boundingBox() const { return _ms.boundingBox(_m); }
+    /** This function returns the diagonal length \f$s\f$ of the spatial cell. */
+    double diagonal() const { return _ms.diagonal(_m); }
 
     /** This function returns the aggregate bulk velocity \f${\boldsymbol{v}}\f$ of the medium in
         the spatial cell. */

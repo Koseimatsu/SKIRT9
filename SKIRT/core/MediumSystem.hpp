@@ -242,9 +242,8 @@ public:
     /** This function returns the volume of the spatial cell with index \f$m\f$. */
     double volume(int m) const;
 
-    /** This function returns the aggregate bulk velocity \f${\boldsymbol{v}}\f$ of the medium in
-        the spatial cell. */
-    Box boundingBox(int m) const;
+    /** This function returns the aggregate the diagonal length in the spatial cell with index \f$m\f$. */
+    double diagonal(int m) const;
 
     /** This function returns the aggregate bulk velocity \f${\boldsymbol{v}}\f$ of the medium in
         spatial cell with index \f$m\f$. If there are multiple media components, the aggregate bulk
