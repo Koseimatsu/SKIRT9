@@ -909,7 +909,7 @@ Array NonLTELineGasMix::_ALILocalMeanIntensity(const MaterialState *state) const
             int ellmax = std::upper_bound(begin(_lambdav), end(_lambdav), lambdamax) - begin(_lambdav);
             double gsum = 0.;
             double Jsum = 0.;
-            double length = state->diagonal();
+            double length = state->diagonal()*0.5;
 
             //auto log = find<Log>();
             //log->info("dx=" + StringUtils::toString(dx) + ", dy=" + StringUtils::toString(dy) + ", dz="
