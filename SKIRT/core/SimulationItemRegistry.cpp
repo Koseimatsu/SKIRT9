@@ -102,6 +102,7 @@
 #include "GrainPopulation.hpp"
 #include "HEALPixSkyInstrument.hpp"
 #include "HammerAitoffProjection.hpp"
+#include "HirashitaLogNormalGrainSizeDistribution.hpp"
 #include "HofmeisterPericlaseGrainComposition.hpp"
 #include "HollowRadialVectorField.hpp"
 #include "HyperboloidGeometry.hpp"
@@ -255,6 +256,7 @@
 #include "TTauriDiskGeometry.hpp"
 #include "TemperatureProbe.hpp"
 #include "TemperatureWavelengthCellLibrary.hpp"
+#include "TetraMeshSpatialGrid.hpp"
 #include "ThemisDustMix.hpp"
 #include "ToddlersSED.hpp"
 #include "ToddlersSEDFamily.hpp"
@@ -493,6 +495,7 @@ SimulationItemRegistry::SimulationItemRegistry(string version, string format)
     ItemRegistry::add<FileTreeSpatialGrid>();
     ItemRegistry::add<AdaptiveMeshSpatialGrid>();
     ItemRegistry::add<VoronoiMeshSpatialGrid>();
+    ItemRegistry::add<TetraMeshSpatialGrid>();
 
     // spatial grid policies
     ItemRegistry::add<TreePolicy>();
@@ -594,6 +597,7 @@ SimulationItemRegistry::SimulationItemRegistry(string version, string format)
     ItemRegistry::add<ZubkoSilicateGrainSizeDistribution>();
     ItemRegistry::add<ZubkoGraphiteGrainSizeDistribution>();
     ItemRegistry::add<ZubkoPAHGrainSizeDistribution>();
+    ItemRegistry::add<HirashitaLogNormalGrainSizeDistribution>();
     ItemRegistry::add<FileGrainSizeDistribution>();
     ItemRegistry::add<ListGrainSizeDistribution>();
 
