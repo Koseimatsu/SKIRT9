@@ -578,8 +578,8 @@ void NonLTELineGasMix::setupSelfBefore()
             {
                 if (rfwlg->bin(_center[k]) < 0)
                     throw FATALERROR("Radiation field wavelength grid does not cover the central line for transition ("
-                                    + StringUtils::toString(_indexUpRad[k]) + "-" + StringUtils::toString(_indexLowRad[k])
-                                    + ")");
+                                     + StringUtils::toString(_indexUpRad[k]) + "-"
+                                     + StringUtils::toString(_indexLowRad[k]) + ")");
             }
         }
         _numWavelengths = rfwlg->numBins();
@@ -935,7 +935,8 @@ UpdateStatus NonLTELineGasMix::updateSpecificState(MaterialState* state, const A
                     gsum += gdlambda;
                     Jsum += Jv[ell] * gdlambda;
                 }
-                if (abs(gsum - 1.) > MAX_GAUSS_ERROR_WARN && updateDynamicStatesFlag() == true && up < maxUpperLevelForRadiation())
+                if (abs(gsum - 1.) > MAX_GAUSS_ERROR_WARN && updateDynamicStatesFlag() == true
+                    && up < maxUpperLevelForRadiation())
                 {
                     auto units = find<Units>();
                     vector<string> message1 = {
@@ -976,7 +977,8 @@ UpdateStatus NonLTELineGasMix::updateSpecificState(MaterialState* state, const A
                 // division to avoid turning that (harmless, J=0) case into a NaN
                 double J = gsum > 0. ? Jsum / gsum : Jsum;
 
-                if (updateDynamicStatesFlag() == false && initialLevelPopsCase() == InitialLevelPopsCase::CollisionallyExcited)
+                if (updateDynamicStatesFlag() == false
+                    && initialLevelPopsCase() == InitialLevelPopsCase::CollisionallyExcited)
                     J = 0.;
                 if (storeMeanIntensities()) state->setMeanIntensity(k, J);
 

@@ -579,7 +579,7 @@ class NonLTELineGasMix : public EmittingGasMix
         ATTRIBUTE_DEFAULT_VALUE(lowestBranchingRatio, "0")
 
         PROPERTY_INT(maxUpperLevelForRadiation,
-                 "include transitions up to this upper level counted from ground (ground = 1)")
+                     "include transitions up to this upper level counted from ground (ground = 1)")
         ATTRIBUTE_MIN_VALUE(maxUpperLevelForRadiation, "[0")
         ATTRIBUTE_MAX_VALUE(maxUpperLevelForRadiation, "999]")
         ATTRIBUTE_DEFAULT_VALUE(maxUpperLevelForRadiation, "999")
