@@ -108,6 +108,15 @@
     total decay rate from the upper level. This can reduce the number of transitions considered in
     the calculations and avoide unnecessary computations for transitions that have a negligible
     effect on the level populations.
+    \em maxUpperLevelForRadiation can ignore radiative transitions from high upper levels.
+    Radiative transitions are included up to the \em maxUpperLevelForRadiation-th level counted from
+    the ground state (ground level = 1), and transitions from higher upper levels are excluded from
+    the statistical-equilibrium equations and from emission/absorption calculations.
+    For example, to include transitions up to the 10th level from the ground state, set
+    \em maxUpperLevelForRadiation to 10.
+    This property is useful when users keep many levels for accurate level populations but are
+    interested mainly in emission/absorption from lower levels.
+    The default value of 999 includes all transitions.
 
     <b>Configuring the simulation</b>
 
@@ -568,6 +577,12 @@ class NonLTELineGasMix : public EmittingGasMix
         ATTRIBUTE_MIN_VALUE(lowestBranchingRatio, "[0")
         ATTRIBUTE_MAX_VALUE(lowestBranchingRatio, "1]")
         ATTRIBUTE_DEFAULT_VALUE(lowestBranchingRatio, "0")
+
+        PROPERTY_INT(maxUpperLevelForRadiation,
+                 "include transitions up to this upper level counted from ground (ground = 1)")
+        ATTRIBUTE_MIN_VALUE(maxUpperLevelForRadiation, "[0")
+        ATTRIBUTE_MAX_VALUE(maxUpperLevelForRadiation, "999]")
+        ATTRIBUTE_DEFAULT_VALUE(maxUpperLevelForRadiation, "999")
 
     ITEM_END()
 

@@ -547,7 +547,7 @@ void NonLTELineGasMix::setupSelfBefore()
     if (_numLines == 0) throw FATALERROR("There are no radiative transitions; increase the number of energy levels");
     for (int k = 0; k != _numLines; ++k)
     {
-        if (_branchRatio[k] > lowestBranchingRatio())
+        if (_branchRatio[k] > lowestBranchingRatio() && _indexUpRad[k] < maxUpperLevelForRadiation())
         {
             log->info("  (" + StringUtils::toString(_indexUpRad[k]) + "-" + StringUtils::toString(_indexLowRad[k])
                       + ") " + StringUtils::toString(units->owavelength(_center[k])) + " " + units->uwavelength()
@@ -574,10 +574,13 @@ void NonLTELineGasMix::setupSelfBefore()
         rfwlg->setup();
         for (int k = 0; k != _numLines; ++k)
         {
-            if (rfwlg->bin(_center[k]) < 0)
-                throw FATALERROR("Radiation field wavelength grid does not cover the central line for transition ("
-                                 + StringUtils::toString(_indexUpRad[k]) + "-" + StringUtils::toString(_indexLowRad[k])
-                                 + ")");
+            if (_branchRatio[k] > lowestBranchingRatio() && _indexUpRad[k] < maxUpperLevelForRadiation())
+            {
+                if (rfwlg->bin(_center[k]) < 0)
+                    throw FATALERROR("Radiation field wavelength grid does not cover the central line for transition ("
+                                    + StringUtils::toString(_indexUpRad[k]) + "-" + StringUtils::toString(_indexLowRad[k])
+                                    + ")");
+            }
         }
         _numWavelengths = rfwlg->numBins();
         _lambdav = rfwlg->lambdav();
@@ -885,7 +888,7 @@ UpdateStatus NonLTELineGasMix::updateSpecificState(MaterialState* state, const A
     UpdateStatus status;
 
     // if the cell does not contain any material for this component, leave all properties untouched
-    if (updateDynamicStatesFlag() == false)
+    if (updateDynamicStatesFlag() == false && initialLevelPopsCase() != InitialLevelPopsCase::CollisionallyExcited)
     {
         status.updateConverged();
     }
@@ -906,7 +909,12 @@ UpdateStatus NonLTELineGasMix::updateSpecificState(MaterialState* state, const A
                 matrix[up][up] -= _einsteinA[k];
                 matrix[low][up] += _einsteinA[k];
 
+                // ignore radiative transitions from high upper levels.
+                if (up >= maxUpperLevelForRadiation()) continue;
+
+                // ignore radiative transitions with a branching ratio below the threshold
                 if (_branchRatio[k] < lowestBranchingRatio()) continue;
+
                 auto log = find<Log>();
 
                 // calculate the mean intensity of the radiation field convolved over the normalized line profile g:
@@ -927,7 +935,7 @@ UpdateStatus NonLTELineGasMix::updateSpecificState(MaterialState* state, const A
                     gsum += gdlambda;
                     Jsum += Jv[ell] * gdlambda;
                 }
-                if (abs(gsum - 1.) > MAX_GAUSS_ERROR_WARN)
+                if (abs(gsum - 1.) > MAX_GAUSS_ERROR_WARN && updateDynamicStatesFlag() == true && up < maxUpperLevelForRadiation())
                 {
                     auto units = find<Units>();
                     vector<string> message1 = {
@@ -967,7 +975,11 @@ UpdateStatus NonLTELineGasMix::updateSpecificState(MaterialState* state, const A
                 // there happen to be no grid points in range at all, gsum and Jsum are both zero and we skip the
                 // division to avoid turning that (harmless, J=0) case into a NaN
                 double J = gsum > 0. ? Jsum / gsum : Jsum;
+
+                if (updateDynamicStatesFlag() == false && initialLevelPopsCase() == InitialLevelPopsCase::CollisionallyExcited)
+                    J = 0.;
                 if (storeMeanIntensities()) state->setMeanIntensity(k, J);
+
                 if (!std::isfinite(J))
                 {
                     throw FATALERROR("Mean intensity J is not finite for transition (" + StringUtils::toString(up) + "-"
@@ -1161,7 +1173,7 @@ double NonLTELineGasMix::opacityAbs(double lambda, const MaterialState* state, c
                 double upnumber = state->levelPopulation(up);
                 double lownumber = state->levelPopulation(low);
                 double transrate = lownumber * _einsteinBlu[k] - upnumber * _einsteinBul[k];
-                if (transrate != 0.)
+                if (transrate != 0. && up < maxUpperLevelForRadiation())
                 {
                     constexpr double front = Constants::h() * Constants::c() / 4. / M_PI;
                     opacity += front / center * transrate * gaussian(lambda, center, sigma);
@@ -1233,7 +1245,8 @@ Array NonLTELineGasMix::lineEmissionSpectrum(const MaterialState* state, const A
         double front = Constants::h() * Constants::c() * state->volume();
         for (int k = 0; k != _numLines; ++k)
         {
-            if (_branchRatio[k] < lowestBranchingRatio())
+            int up = _indexUpRad[k];
+            if (_branchRatio[k] < lowestBranchingRatio() || up >= maxUpperLevelForRadiation())
             {
                 luminosities[k] = 0.;
             }
