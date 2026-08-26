@@ -953,12 +953,12 @@ double NonLTELineGasMix::solveLevelPopulations(MaterialState* state, const Array
         {
             auto units = find<Units>();
             vector<string> message1 = {
-                                       "Integral of Gaussian line profile over radiation field is inaccurate for ",
-                                       " " + _name + " for transition (" + StringUtils::toString(up) + "-" + StringUtils::toString(low) + ")",
-                                       std::string("  integral equals ") + StringUtils::toString(gsum) + " rather than unity",
-                                       std::string("  over wavelengths from ") + StringUtils::toString(units->owavelength(lambdamin)) + " "
-                                           + units->uwavelength() + " to " + StringUtils::toString(units->owavelength(lambdamax)) + " "
-                                           + units->uwavelength() + "."};
+                "Integral of Gaussian line profile over radiation field is inaccurate for ",
+                " " + _name + " for transition (" + StringUtils::toString(up) + "-" + StringUtils::toString(low) + ")",
+                std::string("  integral equals ") + StringUtils::toString(gsum) + " rather than unity",
+                std::string("  over wavelengths from ") + StringUtils::toString(units->owavelength(lambdamin)) + " "
+                    + units->uwavelength() + " to " + StringUtils::toString(units->owavelength(lambdamax)) + " "
+                    + units->uwavelength() + "."};
             vector<string> message2 = {// Concatenate with std::string to include dynamic values
                                        std::string(" 1. Set the wavelength coverage from a velocity window of "
                                                    "±5 x total turbulent velocity (vturb) ")
