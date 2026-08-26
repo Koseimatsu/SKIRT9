@@ -662,6 +662,17 @@ public:
         the update status as described for the UpdateStatus class. */
     UpdateStatus updateSpecificState(MaterialState* state, const Array& Jv) const override;
 
+private:
+    /** This function solves the statistical equilibrium equations for the level populations of
+        the given material state under the specified radiation field, and stores the result back
+        into the state. It returns the average relative change in the level populations compared
+        to their previous values, for use as a convergence indicator. Unlike updateSpecificState(),
+        this function always performs the calculation regardless of the updateDynamicStatesFlag
+        property, so that initializeSpecificState() can use it to establish the initial,
+        collisionally excited level populations even when dynamic updates are disabled. */
+    double solveLevelPopulations(MaterialState* state, const Array& Jv) const;
+
+public:
     /** This function returns true if the state of the medium component corresponding to this
         material mix can be considered to be converged based on the given spatial cell statistics
         and aggregate material states, and false otherwise. For more information on the convergence

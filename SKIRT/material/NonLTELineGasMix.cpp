@@ -738,10 +738,11 @@ void NonLTELineGasMix::initializeSpecificState(MaterialState* state, double /*me
         else if (initialLevelPopsCase() == InitialLevelPopsCase::CollisionallyExcited)
         {
             // initilize level population based on the the detailed balance condition
-            // between collisional transitions and spontaneous emission (i.e., start with non-LTE)
-            Array Jv_zero(_numWavelengths);
-            Jv_zero = 0.0;
-            updateSpecificState(state, Jv_zero);
+            // between collisional transitions and spontaneous emission (i.e., start with non-LTE);
+            // call the solver directly (rather than through updateSpecificState()) so that this
+            // initialization always happens, even if updateDynamicStatesFlag disables later updates
+            Array Jv_zero(_numWavelengths);  // automatically initialized to zero values
+            solveLevelPopulations(state, Jv_zero);
         }
         else if (initialLevelPopsCase() == InitialLevelPopsCase::Custom)
         {
@@ -888,197 +889,193 @@ UpdateStatus NonLTELineGasMix::updateSpecificState(MaterialState* state, const A
     UpdateStatus status;
 
     // if the cell does not contain any material for this component, leave all properties untouched
-    if (updateDynamicStatesFlag() == false && initialLevelPopsCase() != InitialLevelPopsCase::CollisionallyExcited)
+    if (updateDynamicStatesFlag() == false)
     {
         status.updateConverged();
     }
-    else
+    else if (state->numberDensity() > 0)
     {
-        if (state->numberDensity() > 0)
-        {
-            // allocate the statistical equilibrium matrix for the level populations
-            vector<vector<double>> matrix(_numLevels, vector<double>(_numLevels + 1));
+        double change = solveLevelPopulations(state, Jv);
 
-            // add the terms for the radiational transitions
-            for (int k = 0; k != _numLines; ++k)
-            {
-                int up = _indexUpRad[k];
-                int low = _indexLowRad[k];
-
-                // add the Einstein Aul coefficients (spontaneous emission)
-                matrix[up][up] -= _einsteinA[k];
-                matrix[low][up] += _einsteinA[k];
-
-                // ignore radiative transitions from high upper levels.
-                if (up >= maxUpperLevelForRadiation()) continue;
-
-                // ignore radiative transitions with a branching ratio below the threshold
-                if (_branchRatio[k] < lowestBranchingRatio()) continue;
-
-                auto log = find<Log>();
-
-                // calculate the mean intensity of the radiation field convolved over the normalized line profile g:
-                //   J_convolved = \int J_lambda(lambda) g(lambda) d lambda  /  \int g(lambda) d lambda
-                // we use all wavelength points within a given range around the line center and verify that the
-                // grid is sufficiently resolved to reproduce the normalizaton value of 1 = \int g(lambda) d lambda
-                double center = _center[k];
-                double sigma = sigmaForLine(center, state->temperature(), _mass);
-                double lambdamin = center - PROFILE_RANGE * sigma;
-                double lambdamax = center + PROFILE_RANGE * sigma;
-                int ellmin = std::lower_bound(begin(_lambdav), end(_lambdav), lambdamin) - begin(_lambdav);
-                int ellmax = std::upper_bound(begin(_lambdav), end(_lambdav), lambdamax) - begin(_lambdav);
-                double gsum = 0.;
-                double Jsum = 0.;
-                for (int ell = ellmin; ell != ellmax; ++ell)
-                {
-                    double gdlambda = gaussian(_lambdav[ell], center, sigma) * _dlambdav[ell];
-                    gsum += gdlambda;
-                    Jsum += Jv[ell] * gdlambda;
-                }
-                if (abs(gsum - 1.) > MAX_GAUSS_ERROR_WARN && updateDynamicStatesFlag() == true
-                    && up < maxUpperLevelForRadiation())
-                {
-                    auto units = find<Units>();
-                    vector<string> message1 = {
-                        "Integral of Gaussian line profile over radiation field is inaccurate for ",
-                        " " + _name + " for transition (" + StringUtils::toString(up) + "-" + StringUtils::toString(low)
-                            + ")",
-                        std::string("  integral equals ") + StringUtils::toString(gsum) + " rather than unity",
-                        std::string("  over wavelengths from ") + StringUtils::toString(units->owavelength(lambdamin))
-                            + " " + units->uwavelength() + " to " + StringUtils::toString(units->owavelength(lambdamax))
-                            + " " + units->uwavelength() + "."};
-                    vector<string> message2 = {// Concatenate with std::string to include dynamic values
-                                               std::string(" 1. Set the wavelength coverage from a velocity window of "
-                                                           "±5 x total turbulent velocity (vturb) ")
-                                               + " (i.e., Vmin = -5 vturb, Vmax = +5 vturb) for the radiation field "
-                                                 "and sample it with around 100"
-                                               + " points. The total turbulent velocity includes the micro-turbulent "
-                                                 "velocity and thermal velocity."
-                                               + " Now, vturb = " + StringUtils::toString(units->ovelocity(sigma)) + " "
-                                               + units->uvelocity() + "."};
-
-                    if (abs(gsum - 1.) > MAX_GAUSS_ERROR_FAIL && errorForGaussianIntegral())
-                    {
-                        log->info(std::string("Gausss(") + StringUtils::toString(_lambdav[ellmin])
-                                  + ")=" + StringUtils::toString(gaussian(_lambdav[ellmin], center, sigma)) + "Gausss("
-                                  + StringUtils::toString(_lambdav[ellmax - 1])
-                                  + ")=" + StringUtils::toString(gaussian(_lambdav[ellmax - 1], center, sigma)));
-                        log->info(message2[0]);
-                        throw FATALERROR(StringUtils::join(message1, "\n"));
-                    }
-
-                    log->warning(message1[0]);
-                    log->info(message2[0]);
-                    for (size_t i = 1; i != message1.size(); ++i) find<Log>()->info(message1[i]);
-                }
-                // divide by gsum to correct for the fact that, on the discrete wavelength grid, the integral of
-                // g over the profile range is only approximately 1 (this is what the check above verifies); if
-                // there happen to be no grid points in range at all, gsum and Jsum are both zero and we skip the
-                // division to avoid turning that (harmless, J=0) case into a NaN
-                double J = gsum > 0. ? Jsum / gsum : Jsum;
-
-                if (updateDynamicStatesFlag() == false
-                    && initialLevelPopsCase() == InitialLevelPopsCase::CollisionallyExcited)
-                    J = 0.;
-                if (storeMeanIntensities()) state->setMeanIntensity(k, J);
-
-                if (!std::isfinite(J))
-                {
-                    throw FATALERROR("Mean intensity J is not finite for transition (" + StringUtils::toString(up) + "-"
-                                     + StringUtils::toString(low) + ") of " + _name + "The value of J is "
-                                     + StringUtils::toString(J) + ". The line center is "
-                                     + StringUtils::toString(_center[k]) + ".");
-                }
-
-                // add the Einstein Bul coefficients (stimulated emission)
-                matrix[up][up] -= _einsteinBul[k] * J;
-                matrix[low][up] += _einsteinBul[k] * J;
-
-                // add the Einstein Blu coefficients (absorption)
-                matrix[low][low] -= _einsteinBlu[k] * J;
-                matrix[up][low] += _einsteinBlu[k] * J;
-            }
-
-            // add the terms for the collisional transitions
-            double T = state->kineticTemperature();
-            for (int c = 0; c != _numColPartners; ++c)
-            {
-                const auto& partner = _colPartner[c];
-                const auto& Tgrid = _colPartner[c].T;
-                double Tmin_col = Tgrid.min();
-                double Tmax_col = Tgrid.max();
-
-                for (int t = 0; t != partner.numColTrans; ++t)
-                {
-                    int up = partner.indexUpCol[t];
-                    int low = partner.indexLowCol[t];
-                    double weightRatio = _weight[up] / _weight[low];
-                    double energyDiff = _energy[up] - _energy[low];
-                    double Kconversion = std::max(weightRatio * exp(-energyDiff / Constants::k() / T), 1e-15);
-                    // determine Kul by interpolation from the temperature-dependent table
-                    double T_rep = std::max(Tmin_col, std::min(T, Tmax_col));
-                    double Kul = NR::clampedValue<NR::interpolateLogLog>(T_rep, partner.T, partner.Kul[t]);
-                    auto log = find<Log>();
-                    // determine Klu from Kul
-                    double Klu = Kul * Kconversion;
-                    if (Kul <= 0.)
-                    {
-                        log->warning("collisional transition rate Kul is " + StringUtils::toString(Kul)
-                                     + " for collisional partner " + partner.name
-                                     + " at T = " + StringUtils::toString(T) + " of " + _name + " for transition ("
-                                     + StringUtils::toString(up) + "-" + StringUtils::toString(low)
-                                     + "). the excitation energy is "
-                                     + StringUtils::toString(energyDiff / Constants::k()) + " K. Setting it to 1e-20.");
-                        Kul = 1.0e-20;
-                    }
-                    if (Klu <= 0.)
-                    {
-                        double replacementKlu = 1.0e-20 * Kul;
-                        log->warning("collisional transition rate Klu is negative (" + StringUtils::toString(Klu) + ")"
-                                     + " for collisional partner " + partner.name
-                                     + " at T = " + StringUtils::toString(T) + " of " + _name + " K for transition ("
-                                     + StringUtils::toString(up) + "-" + StringUtils::toString(low)
-                                     + "). The excitation energy is "
-                                     + StringUtils::toString(energyDiff / Constants::k()) + " K. Setting it to "
-                                     + StringUtils::toString(replacementKlu) + ".");
-                        Klu = replacementKlu;
-                    }
-
-                    // add the coefficients after multiplication by the partner number density
-                    double n = max(state->colPartnerDensity(c), 1.0e-20);  // avoid zero density
-                    matrix[up][up] -= Kul * n;
-                    matrix[low][low] -= Klu * n;
-                    matrix[up][low] += Klu * n;
-                    matrix[low][up] += Kul * n;
-                }
-            }
-
-            // replace the last row of the matrix by the normalization of the number density
-            for (int p = 0; p != _numLevels; ++p) matrix[_numLevels - 1][p] = 1.;
-            matrix[_numLevels - 1][_numLevels] = state->numberDensity();
-
-            // solve the set of equations represented by the matrix
-            Array solution = solveMatrixEquation(matrix);
-
-            // update the level populations, keeping track of the amount of change
-            double change = 0.;
-            for (int p = 0; p != _numLevels; ++p)
-            {
-                double oldPop = state->levelPopulation(p);
-                double newPop = solution[p];
-                state->setLevelPopulation(p, newPop);
-                change += abs(oldPop / newPop - 1.);
-            }
-            change /= _numLevels;
-
-            // verify convergence
-            if (change > maxChangeInLevelPopulations())
-                status.updateNotConverged();
-            else
-                status.updateConverged();
-        }
+        // verify convergence
+        if (change > maxChangeInLevelPopulations())
+            status.updateNotConverged();
+        else
+            status.updateConverged();
     }
     return status;
+}
+
+////////////////////////////////////////////////////////////////////
+
+double NonLTELineGasMix::solveLevelPopulations(MaterialState* state, const Array& Jv) const
+{
+    // allocate the statistical equilibrium matrix for the level populations
+    vector<vector<double>> matrix(_numLevels, vector<double>(_numLevels + 1));
+
+    // add the terms for the radiational transitions
+    for (int k = 0; k != _numLines; ++k)
+    {
+        int up = _indexUpRad[k];
+        int low = _indexLowRad[k];
+
+        // add the Einstein Aul coefficients (spontaneous emission)
+        matrix[up][up] -= _einsteinA[k];
+        matrix[low][up] += _einsteinA[k];
+
+        // ignore radiative transitions from high upper levels.
+        if (up >= maxUpperLevelForRadiation()) continue;
+
+        // ignore radiative transitions with a branching ratio below the threshold
+        if (_branchRatio[k] < lowestBranchingRatio()) continue;
+
+        auto log = find<Log>();
+
+        // calculate the mean intensity of the radiation field convolved over the normalized line profile g:
+        //   J_convolved = \int J_lambda(lambda) g(lambda) d lambda  /  \int g(lambda) d lambda
+        // we use all wavelength points within a given range around the line center and verify that the
+        // grid is sufficiently resolved to reproduce the normalizaton value of 1 = \int g(lambda) d lambda
+        double center = _center[k];
+        double sigma = sigmaForLine(center, state->temperature(), _mass);
+        double lambdamin = center - PROFILE_RANGE * sigma;
+        double lambdamax = center + PROFILE_RANGE * sigma;
+        int ellmin = std::lower_bound(begin(_lambdav), end(_lambdav), lambdamin) - begin(_lambdav);
+        int ellmax = std::upper_bound(begin(_lambdav), end(_lambdav), lambdamax) - begin(_lambdav);
+        double gsum = 0.;
+        double Jsum = 0.;
+        for (int ell = ellmin; ell != ellmax; ++ell)
+        {
+            double gdlambda = gaussian(_lambdav[ell], center, sigma) * _dlambdav[ell];
+            gsum += gdlambda;
+            Jsum += Jv[ell] * gdlambda;
+        }
+        if (abs(gsum - 1.) > MAX_GAUSS_ERROR_WARN)
+        {
+            auto units = find<Units>();
+            vector<string> message1 = {
+                                       "Integral of Gaussian line profile over radiation field is inaccurate for ",
+                                       " " + _name + " for transition (" + StringUtils::toString(up) + "-" + StringUtils::toString(low) + ")",
+                                       std::string("  integral equals ") + StringUtils::toString(gsum) + " rather than unity",
+                                       std::string("  over wavelengths from ") + StringUtils::toString(units->owavelength(lambdamin)) + " "
+                                           + units->uwavelength() + " to " + StringUtils::toString(units->owavelength(lambdamax)) + " "
+                                           + units->uwavelength() + "."};
+            vector<string> message2 = {// Concatenate with std::string to include dynamic values
+                                       std::string(" 1. Set the wavelength coverage from a velocity window of "
+                                                   "±5 x total turbulent velocity (vturb) ")
+                                       + " (i.e., Vmin = -5 vturb, Vmax = +5 vturb) for the radiation field "
+                                         "and sample it with around 100"
+                                       + " points. The total turbulent velocity includes the micro-turbulent "
+                                         "velocity and thermal velocity."
+                                       + " Now, vturb = " + StringUtils::toString(units->ovelocity(sigma)) + " "
+                                       + units->uvelocity() + "."};
+
+            if (abs(gsum - 1.) > MAX_GAUSS_ERROR_FAIL && errorForGaussianIntegral())
+            {
+                log->info(std::string("Gausss(") + StringUtils::toString(_lambdav[ellmin])
+                          + ")=" + StringUtils::toString(gaussian(_lambdav[ellmin], center, sigma)) + "Gausss("
+                          + StringUtils::toString(_lambdav[ellmax - 1])
+                          + ")=" + StringUtils::toString(gaussian(_lambdav[ellmax - 1], center, sigma)));
+                log->info(message2[0]);
+                throw FATALERROR(StringUtils::join(message1, "\n"));
+            }
+
+            log->warning(message1[0]);
+            log->info(message2[0]);
+            for (size_t i = 1; i != message1.size(); ++i) find<Log>()->info(message1[i]);
+        }
+        // divide by gsum to correct for the fact that, on the discrete wavelength grid, the integral of
+        // g over the profile range is only approximately 1 (this is what the check above verifies); if
+        // there happen to be no grid points in range at all, gsum and Jsum are both zero and we skip the
+        // division to avoid turning that (harmless, J=0) case into a NaN
+        double J = gsum > 0. ? Jsum / gsum : Jsum;
+        if (storeMeanIntensities()) state->setMeanIntensity(k, J);
+
+        if (!std::isfinite(J))
+        {
+            throw FATALERROR("Mean intensity J is not finite for transition (" + StringUtils::toString(up) + "-"
+                             + StringUtils::toString(low) + ") of " + _name + "The value of J is "
+                             + StringUtils::toString(J) + ". The line center is " + StringUtils::toString(_center[k])
+                             + ".");
+        }
+
+        // add the Einstein Bul coefficients (stimulated emission)
+        matrix[up][up] -= _einsteinBul[k] * J;
+        matrix[low][up] += _einsteinBul[k] * J;
+
+        // add the Einstein Blu coefficients (absorption)
+        matrix[low][low] -= _einsteinBlu[k] * J;
+        matrix[up][low] += _einsteinBlu[k] * J;
+    }
+
+    // add the terms for the collisional transitions
+    double T = state->kineticTemperature();
+    for (int c = 0; c != _numColPartners; ++c)
+    {
+        const auto& partner = _colPartner[c];
+        const auto& Tgrid = _colPartner[c].T;
+        double Tmin_col = Tgrid.min();
+        double Tmax_col = Tgrid.max();
+
+        for (int t = 0; t != partner.numColTrans; ++t)
+        {
+            int up = partner.indexUpCol[t];
+            int low = partner.indexLowCol[t];
+            double weightRatio = _weight[up] / _weight[low];
+            double energyDiff = _energy[up] - _energy[low];
+            double Kconversion = std::max(weightRatio * exp(-energyDiff / Constants::k() / T), 1e-15);
+            // determine Kul by interpolation from the temperature-dependent table
+            double T_rep = std::max(Tmin_col, std::min(T, Tmax_col));
+            double Kul = NR::clampedValue<NR::interpolateLogLog>(T_rep, partner.T, partner.Kul[t]);
+            auto log = find<Log>();
+            // determine Klu from Kul
+            double Klu = Kul * Kconversion;
+            if (Kul <= 0.)
+            {
+                log->warning("collisional transition rate Kul is " + StringUtils::toString(Kul)
+                             + " for collisional partner " + partner.name + " at T = " + StringUtils::toString(T)
+                             + " of " + _name + " for transition (" + StringUtils::toString(up) + "-"
+                             + StringUtils::toString(low) + "). the excitation energy is "
+                             + StringUtils::toString(energyDiff / Constants::k()) + " K. Setting it to 1e-20.");
+                Kul = 1.0e-20;
+            }
+            if (Klu <= 0.)
+            {
+                double replacementKlu = 1.0e-20 * Kul;
+                log->warning("collisional transition rate Klu is negative (" + StringUtils::toString(Klu) + ")"
+                             + " for collisional partner " + partner.name + " at T = " + StringUtils::toString(T)
+                             + " of " + _name + " K for transition (" + StringUtils::toString(up) + "-"
+                             + StringUtils::toString(low) + "). The excitation energy is "
+                             + StringUtils::toString(energyDiff / Constants::k()) + " K. Setting it to "
+                             + StringUtils::toString(replacementKlu) + ".");
+                Klu = replacementKlu;
+            }
+
+            // add the coefficients after multiplication by the partner number density
+            double n = max(state->colPartnerDensity(c), 1.0e-20);  // avoid zero density
+            matrix[up][up] -= Kul * n;
+            matrix[low][low] -= Klu * n;
+            matrix[up][low] += Klu * n;
+            matrix[low][up] += Kul * n;
+        }
+    }
+
+    // replace the last row of the matrix by the normalization of the number density
+    for (int p = 0; p != _numLevels; ++p) matrix[_numLevels - 1][p] = 1.;
+    matrix[_numLevels - 1][_numLevels] = state->numberDensity();
+
+    // solve the set of equations represented by the matrix
+    Array solution = solveMatrixEquation(matrix);
+
+    // update the level populations, keeping track of the amount of change
+    double change = 0.;
+    for (int p = 0; p != _numLevels; ++p)
+    {
+        double oldPop = state->levelPopulation(p);
+        double newPop = solution[p];
+        state->setLevelPopulation(p, newPop);
+        change += abs(oldPop / newPop - 1.);
+    }
+    return change / _numLevels;
 }
 
 ////////////////////////////////////////////////////////////////////
