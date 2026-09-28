@@ -4,6 +4,7 @@
 ///////////////////////////////////////////////////////////////// */
 
 #include "LineGasSecondarySource.hpp"
+#include "AngularDistributionInterface.hpp"
 #include "Configuration.hpp"
 #include "Constants.hpp"
 #include "EmittingGasMix.hpp"
@@ -14,8 +15,10 @@
 #include "Parallel.hpp"
 #include "ParallelFactory.hpp"
 #include "PhotonPacket.hpp"
+#include "PolarizationProfileInterface.hpp"
 #include "ProcessManager.hpp"
 #include "Random.hpp"
+#include "StokesVector.hpp"
 #include "StringUtils.hpp"
 #include "Units.hpp"
 #include "VelocityInterface.hpp"
@@ -182,6 +185,51 @@ namespace
 
     // setup an instance of the above class to cache emission information for each parallel execution thread
     thread_local GasCellEmission t_gascell;
+
+    // An instance of this class provides the angular distribution and linear polarization of the line
+    // emission by molecules aligned with respect to the local magnetic field (Goldreich-Kylafis effect;
+    // used only for media with level alignment). With a = w^(2)_{Ju,Jl} sigma(Ju) and cos(theta) = k.b, the
+    // emission relative to an isotropic distribution is 1 + a (3cos^2 - 1)/(2 sqrt2), and the linear
+    // polarization with respect to the projected magnetic field is
+    // Q/I = -3 a sin^2 / sqrt2 / (2 + a (3cos^2 - 1)/sqrt2), U = V = 0.
+    class GKLineEmission : public AngularDistributionInterface, public PolarizationProfileInterface
+    {
+    private:
+        double _a{0.};  // emission alignment factor
+        Vec _b;         // unit magnetic field direction (or null)
+
+    public:
+        GKLineEmission() {}
+
+        void set(double a, Vec B)
+        {
+            _a = a;
+            double norm = B.norm();
+            _b = norm > 0. ? B / norm : Vec();
+        }
+
+        double probabilityForDirection(Direction bfk) const override
+        {
+            if (_a == 0. || _b.isNull()) return 1.;
+            double cosTheta = Vec::dot(bfk, _b);
+            return 1. + _a * (3. * cosTheta * cosTheta - 1.) / (2. * M_SQRT2);
+        }
+
+        StokesVector polarizationForDirection(Direction bfk) const override
+        {
+            if (_a == 0. || _b.isNull()) return StokesVector();
+            double cosTheta = Vec::dot(bfk, _b);
+            double sin2Theta = 1. - cosTheta * cosTheta;
+            double Q = -3. * _a * sin2Theta / M_SQRT2 / (2. + _a * (3. * cosTheta * cosTheta - 1.) / M_SQRT2);
+            // the reference direction (normal x k) is the projection of the magnetic field
+            Direction n(Vec::cross(bfk, _b), true);
+            if (n.isNull()) return StokesVector();
+            return StokesVector(1., Q, 0., 0., n);
+        }
+    };
+
+    // setup an instance of the above class for each parallel execution thread
+    thread_local GKLineEmission t_gkemission;
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -234,7 +282,18 @@ void LineGasSecondarySource::launch(PhotonPacket* pp, size_t historyIndex, doubl
     VelocityInterface* bvi = t_gascell.velocity().isNull() ? nullptr : &t_gascell;
 
     // launch the photon packet with isotropic direction
-    pp->launch(historyIndex, _centers[index], L * ws * w, bfr, _random->direction(), bvi);
+    if (!_ms->hasLevelAlignmentMedia())
+    {
+        pp->launch(historyIndex, _centers[index], L * ws * w, bfr, _random->direction(), bvi);
+    }
+    else
+    {
+        // media with level alignment only: the peel-off photon packets carry the angular distribution
+        // and polarization of the emission by the aligned molecules (for other media the factor is zero)
+        t_gkemission.set(_ms->lineEmissionAlignmentFactor(m, _h, index), _ms->magneticField(m));
+        pp->launch(historyIndex, _centers[index], L * ws * w, bfr, _random->direction(), bvi, &t_gkemission,
+                   &t_gkemission);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////

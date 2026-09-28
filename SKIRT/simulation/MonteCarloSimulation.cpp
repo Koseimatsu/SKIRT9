@@ -4,6 +4,7 @@
 ///////////////////////////////////////////////////////////////// */
 
 #include "MonteCarloSimulation.hpp"
+#include "DistantInstrument.hpp"
 #include "Log.hpp"
 #include "Parallel.hpp"
 #include "ParallelFactory.hpp"
@@ -628,6 +629,14 @@ void MonteCarloSimulation::peelOffEmission(const PhotonPacket* pp, PhotonPacket*
             {
                 ppp->rotateIntoPlane(bfkobs, instrument->bfky(pp->position()));
             }
+
+            // media with level alignment (e.g. Goldreich-Kylafis effect) only:
+            // apply the dichroic extinction along the path to a distant instrument
+            if (_config->hasMedium() && mediumSystem()->hasLevelAlignmentMedia()
+                && dynamic_cast<DistantInstrument*>(instrument))
+            {
+                mediumSystem()->applyDichroicLineExtinction(ppp, instrument->bfky(pp->position()));
+            }
         }
         instrument->detect(ppp);
     }
@@ -637,6 +646,21 @@ void MonteCarloSimulation::peelOffEmission(const PhotonPacket* pp, PhotonPacket*
 
 void MonteCarloSimulation::storeRadiationField(bool primary, const PhotonPacket* pp)
 {
+    // media with level alignment only: direction weights for the global-frame rank-2 radiation tensor components
+    bool anisotropic = mediumSystem()->hasAnisotropicRadiationField();
+    double w[5];
+    if (anisotropic)
+    {
+        double kx, ky, kz;
+        pp->direction().cartesian(kx, ky, kz);
+        constexpr double sq3 = 1.7320508075688772;
+        w[0] = (3. * kz * kz - 1.) / (2. * M_SQRT2);
+        w[1] = -0.5 * sq3 * kx * kz;
+        w[2] = -0.5 * sq3 * ky * kz;
+        w[3] = 0.25 * sq3 * (kx * kx - ky * ky);
+        w[4] = 0.5 * sq3 * kx * ky;
+    }
+
     // use a faster version in case there are no kinematics
     if (_config->hasConstantPerceivedWavelength())
     {
@@ -657,6 +681,7 @@ void MonteCarloSimulation::storeRadiationField(bool primary, const PhotonPacket*
                     double extMean = SpecialFunctions::lnmean(extEnd, extBeg, lnExtEnd, lnExtBeg);
                     double Lds = luminosity * extMean * segment.ds();
                     mediumSystem()->storeRadiationField(primary, m, ell, Lds);
+                    if (anisotropic) mediumSystem()->storeAnisotropicRadiationField(primary, m, ell, Lds, w);
                 }
                 lnExtBeg = lnExtEnd;
                 extBeg = extEnd;
@@ -683,6 +708,7 @@ void MonteCarloSimulation::storeRadiationField(bool primary, const PhotonPacket*
                     double extMean = SpecialFunctions::lnmean(extEnd, extBeg, lnExtEnd, lnExtBeg);
                     double Lds = pp->perceivedLuminosity(lambda) * extMean * segment.ds();
                     mediumSystem()->storeRadiationField(primary, m, ell, Lds);
+                    if (anisotropic) mediumSystem()->storeAnisotropicRadiationField(primary, m, ell, Lds, w);
                 }
             }
             lnExtBeg = lnExtEnd;

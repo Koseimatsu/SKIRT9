@@ -230,6 +230,22 @@ void MediumSystem::setupSelfAfter()
         }
     }
 
+    // ----- media with level alignment (e.g. Goldreich-Kylafis effect): anisotropy of the radiation field -----
+
+    for (int h = 0; h != _numMedia; ++h)
+        if (_media[h]->mix()->hasLevelAlignment()) _align_hv.push_back(h);
+    if (!_align_hv.empty() && _config->hasRadiationField())
+    {
+        _arf1.resize(_numCells, 5 * _wavelengthGrid->numBins());
+        allocatedBytes += _arf1.size() * sizeof(double);
+        if (_config->hasSecondaryRadiationField())
+        {
+            _arf2.resize(_numCells, 5 * _wavelengthGrid->numBins());
+            _arf2c.resize(_numCells, 5 * _wavelengthGrid->numBins());
+            allocatedBytes += 2 * _arf2.size() * sizeof(double);
+        }
+    }
+
     // ----- cache info on the dust emission wavelength grid -----
 
     if (_config->hasDustEmission())
@@ -1289,6 +1305,20 @@ void MediumSystem::clearRadiationField(bool primary)
     {
         _rf2c.setToZero();
     }
+
+    // media with level alignment (e.g. Goldreich-Kylafis effect) only
+    if (_arf1.size())
+    {
+        if (primary)
+        {
+            _arf1.setToZero();
+            if (_arf2.size()) _arf2.setToZero();
+        }
+        else if (_arf2c.size())
+        {
+            _arf2c.setToZero();
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -1311,6 +1341,18 @@ void MediumSystem::communicateRadiationField(bool primary)
     {
         ProcessManager::sumToAll(_rf2c.data());
         _rf2 = _rf2c;
+    }
+
+    // media with level alignment (e.g. Goldreich-Kylafis effect) only
+    if (_arf1.size())
+    {
+        if (primary)
+            ProcessManager::sumToAll(_arf1.data());
+        else if (_arf2c.size())
+        {
+            ProcessManager::sumToAll(_arf2c.data());
+            _arf2 = _arf2c;
+        }
     }
 }
 
@@ -1379,6 +1421,120 @@ Array MediumSystem::meanIntensity(int m) const
         Jv[ell] = radiationField(m, ell) * factor / _wavelengthGrid->effectiveWidth(ell);
     }
     return Jv;
+}
+
+////////////////////////////////////////////////////////////////////
+
+void MediumSystem::storeAnisotropicRadiationField(bool primary, int m, int ell, double Lds, const double* w)
+{
+    Table<2>& table = primary ? _arf1 : _arf2c;
+    for (int c = 0; c != 5; ++c) LockFree::add(table(m, 5 * ell + c), Lds * w[c]);
+}
+
+////////////////////////////////////////////////////////////////////
+
+Array MediumSystem::anisotropicMeanIntensity(int m) const
+{
+    int numWavelengths = _wavelengthGrid->numBins();
+    Array J2v(5 * numWavelengths);
+    double factor = 1. / (4. * M_PI * _state.volume(m));
+    for (int ell = 0; ell < numWavelengths; ell++)
+    {
+        double norm = factor / _wavelengthGrid->effectiveWidth(ell);
+        for (int c = 0; c != 5; ++c)
+        {
+            double rf = _arf1(m, 5 * ell + c);
+            if (_arf2.size()) rf += _arf2(m, 5 * ell + c);
+            J2v[5 * ell + c] = rf * norm;
+        }
+    }
+    return J2v;
+}
+
+////////////////////////////////////////////////////////////////////
+
+double MediumSystem::lineEmissionAlignmentFactor(int m, int h, int k) const
+{
+    MaterialState mst(_state, m, h);
+    return mix(m, h)->lineEmissionAlignmentFactor(&mst, k);
+}
+
+////////////////////////////////////////////////////////////////////
+
+void MediumSystem::applyDichroicLineExtinction(PhotonPacket* pp, Direction bfky) const
+{
+    // the propagation direction and the Stokes reference frame (e_ref, n) with e_ref x n = k;
+    // the reference direction lies in the plane of k and bfky, as set up by rotateIntoPlane()
+    Direction k = pp->direction();
+    Direction n = pp->isPolarized() ? pp->normal() : Direction(Vec::cross(k, bfky), true);
+    if (n.isNull()) return;  // degenerate observer frame; leave the regular extinction in place
+    Vec eref = Vec::cross(n, k);
+
+    // current Stokes vector (normalized to the initial intensity)
+    double I = 1., Q = pp->stokesQ(), U = pp->stokesU(), V = pp->stokesV();
+
+    // walk the path towards the (distant) instrument
+    auto generator = getPathSegmentGenerator(_grid, pp);
+    double s = 0.;
+    while (generator->next())
+    {
+        double ds = generator->ds();
+        int m = generator->m();
+        if (m >= 0 && I > 0.)
+        {
+            double lambda = pp->perceivedWavelength(_state.bulkVelocity(m), _config->hubbleExpansionRate() * s);
+
+            // the magnetic field direction in the cell
+            Vec B = _state.magneticField(m);
+            double Bnorm = B.norm();
+            double cosTheta = Bnorm > 0. ? Vec::dot(B, k) / Bnorm : 1.;
+
+            // accumulate the opacities for the two polarization modes over all media
+            // (for media without level alignment, both equal the regular extinction opacity)
+            double kpar = 0., kper = 0.;
+            for (int h = 0; h != _numMedia; ++h)
+            {
+                MaterialState mst(_state, m, h);
+                double kp, kq;
+                mix(m, h)->polarizedOpacitiesExt(lambda, &mst, pp, cosTheta, kp, kq);
+                kpar += kp;
+                kper += kq;
+            }
+            double taupar = kpar * ds;
+            double tauper = kper * ds;
+
+            // rotate to the frame of the projected magnetic field (angle chi from e_ref towards n)
+            double chi = Bnorm > 0. ? atan2(Vec::dot(B, n), Vec::dot(B, eref)) : 0.;
+            double c2 = cos(2. * chi), s2 = sin(2. * chi);
+            double Qm = c2 * Q + s2 * U;
+            double Um = c2 * U - s2 * Q;
+
+            // extinguish the two linear polarization modes separately, and U and V with the average
+            double Ipar = 0.5 * (I + Qm) * exp(-taupar);
+            double Iper = 0.5 * (I - Qm) * exp(-tauper);
+            double emean = exp(-0.5 * (taupar + tauper));
+            Um *= emean;
+            V *= emean;
+            I = Ipar + Iper;
+            Qm = Ipar - Iper;
+
+            // rotate back to the reference frame
+            Q = c2 * Qm - s2 * Um;
+            U = s2 * Qm + c2 * Um;
+        }
+        s += ds;
+    }
+
+    // store the result in the form expected by the flux recorder
+    if (I > 0.)
+    {
+        pp->setPolarized(StokesVector(I, Q, U, V, n));
+        pp->setObservedOpticalDepth(-log(I));
+    }
+    else
+    {
+        pp->setObservedOpticalDepth(std::numeric_limits<double>::infinity());
+    }
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -1582,7 +1738,12 @@ bool MediumSystem::updateDynamicStateMedia(bool primary)
                 for (int h : (primary ? _pdms_hv : _sdms_hv))
                 {
                     MaterialState mst(_state, m, h);
-                    flags[m].update(mix(m, h)->updateSpecificState(&mst, Jv));
+                    // media with level alignment also need the anisotropy of the radiation field
+                    if (hasAnisotropicRadiationField() && mix(m, h)->hasLevelAlignment())
+                        flags[m].update(
+                            mix(m, h)->updateSpecificStateWithAnisotropy(&mst, Jv, anisotropicMeanIntensity(m)));
+                    else
+                        flags[m].update(mix(m, h)->updateSpecificState(&mst, Jv));
                 }
             }
             log->infoIfElapsed("Updated medium state: ", currentChunkSize);

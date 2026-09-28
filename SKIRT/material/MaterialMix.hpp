@@ -322,6 +322,17 @@ public:
         false. */
     virtual bool hasLineEmission() const;
 
+    /** This function returns true if this material mix tracks the alignment of its energy levels
+        with respect to the local magnetic field, and false otherwise. The level alignment is caused
+        by the anisotropy of the radiation field and in turn causes linearly polarized, anisotropic
+        line emission and dichroic line extinction (e.g. the Goldreich-Kylafis effect for molecular
+        rotational lines). If this function returns true, the simulation records the anisotropy of
+        the radiation field and calls updateSpecificStateWithAnisotropy() instead of
+        updateSpecificState(), and the material mix should also implement polarizedOpacitiesExt()
+        and lineEmissionAlignmentFactor(). The default implementation in this base class returns
+        false. */
+    virtual bool hasLevelAlignment() const;
+
     //======== Medium state setup =======
 
 public:
@@ -386,6 +397,16 @@ public:
         component. The default implementation in this base class throws a fatal error. */
     virtual UpdateStatus updateSpecificState(MaterialState* state, const Array& Jv) const;
 
+    /** This function is invoked instead of updateSpecificState() for material mixes that track the
+        alignment of their energy levels (see hasLevelAlignment()). In addition to the mean
+        intensity \em Jv, it receives the five global-frame rank-2 components of the radiation
+        field tensor on the same wavelength grid (\em J2v, laid out as J2v[5*ell+c] for
+        \f$J^2_0\f$, Re \f$J^2_1\f$, Im \f$J^2_1\f$, Re \f$J^2_2\f$, Im \f$J^2_2\f$, normalized as
+        the mean intensity). The default implementation in this base class ignores the anisotropy
+        and calls updateSpecificState(). */
+    virtual UpdateStatus updateSpecificStateWithAnisotropy(MaterialState* state, const Array& Jv,
+                                                           const Array& J2v) const;
+
     /** If this material mix has a dynamic medium state, i.e. if the hasDynamicMediumState()
         function returns anything other than \c None, this function is invoked (once) \em after
         updateSpecificState() has been called for all spatial cells. The \em numCells, \em
@@ -449,6 +470,16 @@ public:
         for the given wavelength, material state, and photon properties (optional; may be nullptr).
         */
     virtual double opacityExt(double lambda, const MaterialState* state, const PhotonPacket* pp) const = 0;
+
+    /** This function returns in \em kpar and \em kper the extinction opacities for radiation
+        linearly polarized parallel and perpendicular to the projection of the local magnetic field
+        on the plane perpendicular to the propagation direction, where \em cosTheta is the cosine
+        of the angle between the propagation direction and the magnetic field. It is used for
+        material mixes that track the alignment of their energy levels (see hasLevelAlignment()),
+        which cause dichroic extinction. The default implementation in this base class returns
+        the (non-dichroic) extinction opacity opacityExt() for both. */
+    virtual void polarizedOpacitiesExt(double lambda, const MaterialState* state, const PhotonPacket* pp,
+                                       double cosTheta, double& kpar, double& kper) const;
 
     /** This function calculates the contribution of the medium component associated with this
         material mix to the peel-off photon luminosity, polarization state, and wavelength shift
@@ -577,6 +608,17 @@ public:
         correspond to each of the lines returned by the lineEmissionCenters() function. The default
         implementation in this base class throws a fatal error. */
     virtual Array lineEmissionSpectrum(const MaterialState* state, const Array& Jv) const;
+
+    /** For material mixes that track the alignment of their energy levels (see
+        hasLevelAlignment()), this function returns the factor \f$a\f$ that determines the angular
+        distribution and linear polarization of the emission in line \em k in the spatial cell
+        represented by the material state: relative to an isotropic distribution, the emitted
+        intensity is \f$1+a(3\cos^2artheta-1)/(2\sqrt{2})\f$, and the linear polarization with
+        respect to the projected magnetic field is \f$Q/I=-3a\sin^2artheta/\sqrt{2}\,/\,
+        (2+a(3\cos^2artheta-1)/\sqrt{2})\f$, where \f$artheta\f$ is the angle between the
+        emission direction and the magnetic field. The default implementation in this base class
+        returns zero (isotropic, unpolarized emission). */
+    virtual double lineEmissionAlignmentFactor(const MaterialState* state, int k) const;
 
     //============== Indicative temperature =============
 

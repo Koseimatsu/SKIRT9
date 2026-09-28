@@ -104,6 +104,13 @@ bool MaterialMix::hasLineEmission() const
 
 ////////////////////////////////////////////////////////////////////
 
+bool MaterialMix::hasLevelAlignment() const
+{
+    return false;
+}
+
+////////////////////////////////////////////////////////////////////
+
 vector<SnapshotParameter> MaterialMix::parameterInfo() const
 {
     return vector<SnapshotParameter>();
@@ -120,6 +127,22 @@ void MaterialMix::initializeSpecificState(MaterialState* /*state*/, double /*met
 UpdateStatus MaterialMix::updateSpecificState(MaterialState* /*state*/, const Array& /*Jv*/) const
 {
     throw FATALERROR("This function implementation should never be called");
+}
+
+////////////////////////////////////////////////////////////////////
+
+UpdateStatus MaterialMix::updateSpecificStateWithAnisotropy(MaterialState* state, const Array& Jv,
+                                                            const Array& /*J2v*/) const
+{
+    return updateSpecificState(state, Jv);
+}
+
+////////////////////////////////////////////////////////////////////
+
+void MaterialMix::polarizedOpacitiesExt(double lambda, const MaterialState* state, const PhotonPacket* pp,
+                                        double /*cosTheta*/, double& kpar, double& kper) const
+{
+    kpar = kper = opacityExt(lambda, state, pp);
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -215,6 +238,13 @@ Array MaterialMix::lineEmissionMasses() const
 Array MaterialMix::lineEmissionSpectrum(const MaterialState* /*state*/, const Array& /*Jv*/) const
 {
     throw FATALERROR("This function implementation should never be called");
+}
+
+////////////////////////////////////////////////////////////////////
+
+double MaterialMix::lineEmissionAlignmentFactor(const MaterialState* /*state*/, int /*k*/) const
+{
+    return 0.;
 }
 
 ////////////////////////////////////////////////////////////////////

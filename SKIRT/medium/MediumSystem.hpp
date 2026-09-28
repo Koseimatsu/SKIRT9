@@ -659,6 +659,55 @@ public:
         synchronized and its contents is copied into the stable secondary table. */
     void communicateRadiationField(bool primary);
 
+    //=============== Level alignment (e.g. Goldreich-Kylafis effect) ===================
+
+    // The functions in this section are used only for simulations that include a medium whose
+    // material mix tracks the alignment of its energy levels (see MaterialMix::hasLevelAlignment());
+    // they do not affect any other simulation.
+
+    /** This function returns true if the simulation includes a medium whose material mix tracks
+        the alignment of its energy levels, and false otherwise. */
+    bool hasLevelAlignmentMedia() const { return !_align_hv.empty(); }
+
+    /** This function returns true if the anisotropy of the radiation field is being recorded,
+        i.e. if the simulation stores the radiation field and includes a medium with level
+        alignment. */
+    bool hasAnisotropicRadiationField() const { return _arf1.size() > 0; }
+
+    /** This function adds the value \f$L\,\Delta s\f$ multiplied by each of the five direction
+        weights \em w of the global-frame rank-2 radiation tensor components to the anisotropic
+        radiation field bins for spatial cell \f$m\f$ and wavelength index \f$\ell\f$ (primary or
+        temporary secondary table, as for storeRadiationField()). The weights for a propagation
+        direction \f$(k_x,k_y,k_z)\f$ are \f$(3k_z^2-1)/(2\sqrt{2})\f$,
+        \f$-\sqrt{3}/2\,k_xk_z\f$, \f$-\sqrt{3}/2\,k_yk_z\f$, \f$\sqrt{3}/4\,(k_x^2-k_y^2)\f$,
+        and \f$\sqrt{3}/2\,k_xk_y\f$, corresponding to \f$J^2_0\f$, Re \f$J^2_1\f$, Im
+        \f$J^2_1\f$, Re \f$J^2_2\f$, and Im \f$J^2_2\f$. The addition is thread-safe. */
+    void storeAnisotropicRadiationField(bool primary, int m, int ell, double Lds, const double* w);
+
+    /** This function returns the five global-frame rank-2 radiation tensor components for spatial
+        cell \f$m\f$ on the radiation field wavelength grid, normalized as the mean intensity
+        returned by meanIntensity(), laid out as J2v[5*ell+c]. */
+    Array anisotropicMeanIntensity(int m) const;
+
+    /** This function returns the emission alignment factor of line \em k of medium component
+        \em h in spatial cell \em m, as defined by MaterialMix::lineEmissionAlignmentFactor(). */
+    double lineEmissionAlignmentFactor(int m, int h, int k) const;
+
+    /** This function applies the dichroic extinction by media with level alignment along the path of
+        the given emission peel-off photon packet towards a distant instrument, and stores the
+        result in the photon packet in the form expected by the instrument's flux recorder: the
+        Stokes vector is replaced by the extinguished (normalized) Stokes vector, and the effective
+        optical depth \f$-\ln(I)\f$ of the total intensity is stored as the "observed" optical
+        depth. In each cell, the Stokes vector is rotated to the frame of the projected magnetic
+        field, where the intensities polarized parallel and perpendicular to that direction are
+        extinguished separately with the opacities returned by MaterialMix::polarizedOpacitiesExt()
+        (both equal the regular extinction opacity for media without level alignment), and Stokes U
+        and V with the average optical depth. The Stokes vector is defined
+        with respect to the reference direction in the plane of the propagation direction and
+        \em bfky (as for instrument detection). The function must be called after the photon
+        packet has been launched towards the instrument and before it is detected. */
+    void applyDichroicLineExtinction(PhotonPacket* pp, Direction bfky) const;
+
     /** This function returns a pair of values specifying the bolometric luminosity absorbed by
         dust media across the complete domain of the spatial grid, respectively using the partial
         radiation field stored in the primary table and the stable secondary table. The bolometric
@@ -886,6 +935,14 @@ private:
     Table<2> _rf1;   // radiation field from primary sources
     Table<2> _rf2;   // radiation field from secondary sources (copied from _rf2c at the appropriate time)
     Table<2> _rf2c;  // radiation field currently being accumulated from secondary sources
+
+    // relevant only for simulations with a medium with level alignment (e.g. Goldreich-Kylafis effect)
+    vector<int> _align_hv;  // a list of indices for media components with level alignment
+    // anisotropic radiation field tables, organized as the tables above but with 5 entries per wavelength
+    // (indexed on m, 5*ell+c) for the global-frame rank-2 components; allocated only for level alignment
+    Table<2> _arf1;   // from primary sources
+    Table<2> _arf2;   // from secondary sources (copied from _arf2c at the appropriate time)
+    Table<2> _arf2c;  // currently being accumulated from secondary sources
 
     // relevant for any simulation mode that includes dust emission
     int _numDustEmissionWavelengths{0};

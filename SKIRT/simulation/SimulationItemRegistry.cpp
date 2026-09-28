@@ -105,6 +105,7 @@
 #include "FragmentDustMixDecorator.hpp"
 #include "FrameInstrument.hpp"
 #include "FullInstrument.hpp"
+#include "GKLineGasMix.hpp"
 #include "GammaGeometry.hpp"
 #include "GaussianGeometry.hpp"
 #include "GeometricMedium.hpp"
@@ -623,6 +624,7 @@ SimulationItemRegistry::SimulationItemRegistry(string version, string format)
     ItemRegistry::add<XRayIonicGasMix>();
     ItemRegistry::add<EmittingGasMix>();
     ItemRegistry::add<NonLTELineGasMix>();
+    ItemRegistry::add<GKLineGasMix>();
     ItemRegistry::add<DiffuseIonizedGasMix>();
     ItemRegistry::add<LyaNeutralHydrogenGasMix>();
     ItemRegistry::add<TrivialGasMix>();
