@@ -58,7 +58,23 @@
     support in all media. As for NonLTELineGasMix, the radiation field wavelength grid must resolve
     the line profiles. The number density of the species is imported or configured through the
     medium; the kinetic temperature, collision partner densities and turbulence velocity are
-    imported or taken from the default values configured for this material mix. */
+    imported or taken from the default values configured for this material mix.
+
+    <b>Initial and fixed level state</b>
+
+    By default, the level populations are initialized to LTE at the kinetic temperature and the
+    alignments to zero. If the \em initialLevelStateFilename string is nonempty, it specifies the
+    name of a text column file with a row for each spatial cell in the simulation (in the order of
+    the cells in the spatial grid) and the following columns: a cell index that is ignored, the
+    relative population of each energy level in units of number density (the values are scaled to
+    the total number density in the cell, so the specific units do not matter), and the relative
+    alignment \f$\sigma^2_0=\rho^2_0/\rho^0_0\f$ of each energy level with respect to the local
+    magnetic field. Cells that are not listed in the file, or whose populations do not sum to a
+    positive value, are initialized as in the default case. If the \em updateDynamicStatesFlag
+    property is set to false, the level populations and alignments keep their initial values
+    during the simulation; the radiation tensor elements are still calculated and stored. Together,
+    these options allow the polarized transfer to be calculated for a prescribed excitation, e.g.,
+    for comparison with another code. The default values preserve the self-consistent behavior. */
 class GKLineGasMix : public EmittingGasMix
 {
     /** The enumeration type indicating the molecular species represented by a given GKLineGasMix
@@ -130,6 +146,14 @@ class GKLineGasMix : public EmittingGasMix
         ATTRIBUTE_MAX_VALUE(lowestOpticalDepth, "0]")
         ATTRIBUTE_DEFAULT_VALUE(lowestOpticalDepth, "-2")
         ATTRIBUTE_DISPLAYED_IF(lowestOpticalDepth, "Level3")
+
+        PROPERTY_STRING(initialLevelStateFilename, "the name of the file with initial level populations and alignments")
+        ATTRIBUTE_REQUIRED_IF(initialLevelStateFilename, "false")
+        ATTRIBUTE_DISPLAYED_IF(initialLevelStateFilename, "Level3")
+
+        PROPERTY_BOOL(updateDynamicStatesFlag, "update the level populations and alignments from the initial ones")
+        ATTRIBUTE_DEFAULT_VALUE(updateDynamicStatesFlag, "true")
+        ATTRIBUTE_DISPLAYED_IF(updateDynamicStatesFlag, "Level3")
 
     ITEM_END()
 
@@ -328,7 +352,8 @@ private:
     int _indexFirstColPartnerDensity{0};
     int _indexFirstLevelPopulation{0};
     int _indexFirstLevelAlignment{0};
-    int _indexFirstLineTensor{0};  // 7 variables per line: J00, J20GF, J21re, J21im, J22re, J22im, J20MF
+    int _indexFirstLineTensor{0};   // 7 variables per line: J00, J20GF, J21re, J21im, J22re, J22im, J20MF
+    vector<Array> _initLevelState;  // initial populations and alignments for each cell -- indices m, column
 };
 
 ////////////////////////////////////////////////////////////////////

@@ -12,6 +12,7 @@
 #include "MaterialState.hpp"
 #include "NR.hpp"
 #include "StringUtils.hpp"
+#include "TextInFile.hpp"
 #include "Units.hpp"
 
 ////////////////////////////////////////////////////////////////////
@@ -458,6 +459,17 @@ void GKLineGasMix::setupSelfBefore()
         _lambdav = rfwlg->lambdav();
         _dlambdav = rfwlg->dlambdav();
     }
+
+    // load the initial level populations and alignments if the user provided a filename
+    if (!initialLevelStateFilename().empty())
+    {
+        TextInFile infile(this, initialLevelStateFilename(), "initial level populations and alignments");
+        infile.addColumn("cell index");
+        for (int p = 0; p != numLevels; ++p)
+            infile.addColumn("population of level " + std::to_string(p), "numbervolumedensity", "1/cm3");
+        for (int p = 0; p != numLevels; ++p) infile.addColumn("alignment of level " + std::to_string(p));
+        _initLevelState = infile.readAllRows();
+    }
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -613,10 +625,27 @@ void GKLineGasMix::initializeSpecificState(MaterialState* state, double /*metall
             pops = 0.;
             pops[0] = state->numberDensity();
         }
+        Array aligns(numLevels);
+
+        // if the user configured a file with the initial level state, use those data instead
+        size_t m = state->cellIndex();
+        if (m < _initLevelState.size())
+        {
+            const Array& row = _initLevelState[m];
+            Array filePops(numLevels);
+            for (int p = 0; p != numLevels; ++p) filePops[p] = row[1 + p];
+            double fileSum = filePops.sum();
+            if (fileSum > 0.)
+            {
+                pops = filePops * (state->numberDensity() / fileSum);
+                for (int p = 0; p != numLevels; ++p) aligns[p] = _twoJ[p] >= 2 ? row[1 + numLevels + p] : 0.;
+            }
+        }
+
         for (int p = 0; p != numLevels; ++p)
         {
             state->setLevelPopulation(p, pops[p]);
-            state->setLevelAlignment(p, 0.);
+            state->setLevelAlignment(p, aligns[p]);
         }
     }
 }
@@ -719,6 +748,9 @@ double GKLineGasMix::solveAndStore(MaterialState* state, const vector<double>& J
         state->setLineTensor(k, 6, J2MF[k]);
     }
 
+    // keep the level populations and alignments fixed if so requested
+    if (!updateDynamicStatesFlag()) return 0.;
+
     // solve the pol-SEE
     int numColPartners = _model.numColPartners();
     vector<double> nPartner(numColPartners);
@@ -747,6 +779,8 @@ double GKLineGasMix::solveAndStore(MaterialState* state, const vector<double>& J
 bool GKLineGasMix::isSpecificStateConverged(int numCells, int /*numUpdated*/, int numNotConverged,
                                             MaterialState* currentAggregate, MaterialState* previousAggregate) const
 {
+    if (!updateDynamicStatesFlag()) return true;
+
     double fractionNotConverged = static_cast<double>(numNotConverged) / static_cast<double>(numCells);
     double changeInGlobalLevelPops = 0.;
     for (int p = 0; p != _model.numLevels(); ++p)
